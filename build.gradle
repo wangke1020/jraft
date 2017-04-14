@@ -1,0 +1,68 @@
+apply plugin: 'idea'
+apply plugin: 'java'
+apply plugin: 'com.google.protobuf'
+
+
+dependencies {
+    compile 'io.grpc:grpc-netty:1.2.0'
+    compile 'io.grpc:grpc-protobuf:1.2.0'
+    compile 'io.grpc:grpc-stub:1.2.0'
+
+    testCompile "junit:junit:4.11"
+}
+
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        // ASSUMES GRADLE 2.12 OR HIGHER. Use plugin version 0.7.5 with earlier
+        // gradle versions
+        classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.0'
+    }
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+protobuf {
+    protoc {
+        // The version of protoc must match protobuf-java. If you don't depend on
+        // protobuf-java directly, you will be transitively depending on the
+        // protobuf-java version that grpc depends on.
+        artifact = "com.google.protobuf:protoc:3.2.0"
+    }
+    plugins {
+        grpc {
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.2.0'
+        }
+    }
+    generateProtoTasks {
+        all()*.plugins {
+            grpc {}
+        }
+    }
+    generatedFilesBaseDir = "$projectDir/src/gen"
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+        }
+        proto {
+            srcDir 'src/main/java/proto'
+        }
+    }
+}
+
+task runMain(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'io.github.jraft.Node'
+}
