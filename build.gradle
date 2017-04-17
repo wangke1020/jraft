@@ -1,13 +1,16 @@
-apply plugin: 'idea'
+
 apply plugin: 'java'
 apply plugin: 'com.google.protobuf'
-
+apply plugin: 'idea'
 
 dependencies {
     compile 'io.grpc:grpc-netty:1.2.0'
     compile 'io.grpc:grpc-protobuf:1.2.0'
     compile 'io.grpc:grpc-stub:1.2.0'
+    compile "org.fusesource.leveldbjni:leveldbjni-linux64:1.8"
+    compile "org.apache.commons:commons-lang3:3.5"
 
+    testCompile "org.fusesource.leveldbjni:leveldbjni-linux64:1.8"
     testCompile "junit:junit:4.11"
 }
 
@@ -45,16 +48,26 @@ protobuf {
     }
     generateProtoTasks {
         all()*.plugins {
-            grpc {}
+            grpc {
+                outputSubDir = ''
+            }
         }
     }
-    generatedFilesBaseDir = "$projectDir/src/gen"
+    generatedFilesBaseDir = "$projectDir/src"
+}
+
+idea {
+    module {
+        sourceDirs += file('src/main/java')
+
+        testSourceDirs += file('test/main/java')
+    }
 }
 
 sourceSets {
     main {
         java {
-            srcDir 'src/main/java'
+            srcDir 'src'
         }
         proto {
             srcDir 'src/main/java/proto'

@@ -6,4 +6,6 @@ public class Config {
     public static int CandidateTimeoutSec = 5;
 
     public static int leaderHbIntervalSec = 3;
+    
+    public static String persistenceFilePath = "/opt/test/raft.db";
 }

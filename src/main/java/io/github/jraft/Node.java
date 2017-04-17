@@ -14,18 +14,21 @@ import java.util.concurrent.locks.ReentrantLock;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import grpc.Raft.*;
+import grpc.Raft.AppendEntriesReq;
+import grpc.Raft.AppendEntriesResp;
+import grpc.Raft.RequestVoteReq;
+import grpc.Raft.RequestVoteResp;
 import grpc.RaftCommServiceGrpc;
-import grpc.RaftCommServiceGrpc.*;
+import grpc.RaftCommServiceGrpc.RaftCommServiceFutureStub;
 import io.grpc.Channel;
 import io.grpc.Server;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
-
 import javax.annotation.Nullable;
 
-public class Node extends RaftCommServiceImplBase {
+
+public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     
     enum State {
         Follower,
@@ -193,6 +196,12 @@ public class Node extends RaftCommServiceImplBase {
                         continue;
                     }
                     debug("isVotedGrated: " + resp.getVoteGranted());
+                    if(resp.getTerm() > currentTerm_.get()) {
+                        state_.set(State.Follower);
+                        signalTimeoutCond();
+                        return;
+                    }
+                    
                     if(resp.getVoteGranted()) {
                         debug("quorumNum: " + getQuorumNum());
                         if(++grantedVotes_ >= getQuorumNum()) {
@@ -237,16 +246,26 @@ public class Node extends RaftCommServiceImplBase {
         debug("receive vote request from node: " + req.getCandidateId());
         RequestVoteResp.Builder respBuilder = RequestVoteResp.newBuilder();
 //        debug("current state: " + state_.get() +
-//                ", current term: " + currentTerm_.get() + ", req term: " + req.getTerm() + ", voteFor: " + voteFor_);
-        if(!state_.get().equals(State.Follower) ||
-                req.getTerm() <= currentTerm_.get() ||
-                voteFor_ != null) {
+////                ", current term: " + currentTerm_.get() + ", req term: " + req.getTerm() + ", voteFor: " + voteFor_);
+
+        if(req.getTerm() >= currentTerm_.get() &&
+                (voteFor_ == null || voteFor_ == req.getCandidateId())) {
+            if(req.getTerm() > currentTerm_.get()) {
+                currentTerm_.set(req.getTerm());
+                if(!state_.equals(State.Follower)) {
+                    state_.set(State.Follower);
+                    signalTimeoutCond();
+                }
+            }
+            currentTerm_.set(req.getTerm());
             
-            respBuilder.setVoteGranted(false);
-        }else {
             respBuilder.setVoteGranted(true);
             voteFor_ = req.getCandidateId();
+        }else {
+            respBuilder.setVoteGranted(false);
         }
+        
+        respBuilder.setTerm(currentTerm_.get());
         
         responseObserver.onNext(respBuilder.build());
         responseObserver.onCompleted();
@@ -265,7 +284,7 @@ public class Node extends RaftCommServiceImplBase {
     
     @Override
     public void appendEntries(AppendEntriesReq req,
-                              io.grpc.stub.StreamObserver<grpc.Raft.AppendEntriesResp> responseObserver) {
+                              io.grpc.stub.StreamObserver<AppendEntriesResp> responseObserver) {
         
        AppendEntriesResp.Builder respBuilder = AppendEntriesResp.newBuilder();
        
