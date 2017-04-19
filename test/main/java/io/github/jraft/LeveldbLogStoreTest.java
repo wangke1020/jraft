@@ -1,4 +1,7 @@
 package io.github.jraft;
+
+import com.google.protobuf.ByteString;
+import grpc.Raft.Log;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -14,7 +17,9 @@ public class LeveldbLogStoreTest {
         byte[] data = "test".getBytes();
         int i = 0;
         for(;i<100;++i) {
-            logs.add(new Log(i, i/5, data, "peer"));
+            Log log = Log.newBuilder()
+                    .setIndex(i).setTerm(i/5).setData(ByteString.copyFrom(data)).setPeer("peer").build();
+            logs.add(log);
         }
     
     

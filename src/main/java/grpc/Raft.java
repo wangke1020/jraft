@@ -1154,17 +1154,28 @@ public final class Raft {
     long getPreLogTerm();
 
     /**
-     * <code>repeated int64 entries = 5;</code>
+     * <code>repeated .Log entries = 5;</code>
      */
-    java.util.List<java.lang.Long> getEntriesList();
+    java.util.List<grpc.Raft.Log> 
+        getEntriesList();
     /**
-     * <code>repeated int64 entries = 5;</code>
+     * <code>repeated .Log entries = 5;</code>
+     */
+    grpc.Raft.Log getEntries(int index);
+    /**
+     * <code>repeated .Log entries = 5;</code>
      */
     int getEntriesCount();
     /**
-     * <code>repeated int64 entries = 5;</code>
+     * <code>repeated .Log entries = 5;</code>
      */
-    long getEntries(int index);
+    java.util.List<? extends grpc.Raft.LogOrBuilder> 
+        getEntriesOrBuilderList();
+    /**
+     * <code>repeated .Log entries = 5;</code>
+     */
+    grpc.Raft.LogOrBuilder getEntriesOrBuilder(
+        int index);
 
     /**
      * <code>int64 leader_commit = 6;</code>
@@ -1236,25 +1247,13 @@ public final class Raft {
               preLogTerm_ = input.readInt64();
               break;
             }
-            case 40: {
-              if (!((mutable_bitField0_ & 0x00000010) == 0x00000010)) {
-                entries_ = new java.util.ArrayList<java.lang.Long>();
-                mutable_bitField0_ |= 0x00000010;
-              }
-              entries_.add(input.readInt64());
-              break;
-            }
             case 42: {
-              int length = input.readRawVarint32();
-              int limit = input.pushLimit(length);
-              if (!((mutable_bitField0_ & 0x00000010) == 0x00000010) && input.getBytesUntilLimit() > 0) {
-                entries_ = new java.util.ArrayList<java.lang.Long>();
+              if (!((mutable_bitField0_ & 0x00000010) == 0x00000010)) {
+                entries_ = new java.util.ArrayList<grpc.Raft.Log>();
                 mutable_bitField0_ |= 0x00000010;
               }
-              while (input.getBytesUntilLimit() > 0) {
-                entries_.add(input.readInt64());
-              }
-              input.popLimit(limit);
+              entries_.add(
+                  input.readMessage(grpc.Raft.Log.parser(), extensionRegistry));
               break;
             }
             case 48: {
@@ -1326,27 +1325,39 @@ public final class Raft {
     }
 
     public static final int ENTRIES_FIELD_NUMBER = 5;
-    private java.util.List<java.lang.Long> entries_;
+    private java.util.List<grpc.Raft.Log> entries_;
     /**
-     * <code>repeated int64 entries = 5;</code>
+     * <code>repeated .Log entries = 5;</code>
      */
-    public java.util.List<java.lang.Long>
-        getEntriesList() {
+    public java.util.List<grpc.Raft.Log> getEntriesList() {
       return entries_;
     }
     /**
-     * <code>repeated int64 entries = 5;</code>
+     * <code>repeated .Log entries = 5;</code>
+     */
+    public java.util.List<? extends grpc.Raft.LogOrBuilder> 
+        getEntriesOrBuilderList() {
+      return entries_;
+    }
+    /**
+     * <code>repeated .Log entries = 5;</code>
      */
     public int getEntriesCount() {
       return entries_.size();
     }
     /**
-     * <code>repeated int64 entries = 5;</code>
+     * <code>repeated .Log entries = 5;</code>
      */
-    public long getEntries(int index) {
+    public grpc.Raft.Log getEntries(int index) {
       return entries_.get(index);
     }
-    private int entriesMemoizedSerializedSize = -1;
+    /**
+     * <code>repeated .Log entries = 5;</code>
+     */
+    public grpc.Raft.LogOrBuilder getEntriesOrBuilder(
+        int index) {
+      return entries_.get(index);
+    }
 
     public static final int LEADER_COMMIT_FIELD_NUMBER = 6;
     private long leaderCommit_;
@@ -1369,7 +1380,6 @@ public final class Raft {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      getSerializedSize();
       if (term_ != 0L) {
         output.writeInt64(1, term_);
       }
@@ -1382,12 +1392,8 @@ public final class Raft {
       if (preLogTerm_ != 0L) {
         output.writeInt64(4, preLogTerm_);
       }
-      if (getEntriesList().size() > 0) {
-        output.writeUInt32NoTag(42);
-        output.writeUInt32NoTag(entriesMemoizedSerializedSize);
-      }
       for (int i = 0; i < entries_.size(); i++) {
-        output.writeInt64NoTag(entries_.get(i));
+        output.writeMessage(5, entries_.get(i));
       }
       if (leaderCommit_ != 0L) {
         output.writeInt64(6, leaderCommit_);
@@ -1415,19 +1421,9 @@ public final class Raft {
         size += com.google.protobuf.CodedOutputStream
           .computeInt64Size(4, preLogTerm_);
       }
-      {
-        int dataSize = 0;
-        for (int i = 0; i < entries_.size(); i++) {
-          dataSize += com.google.protobuf.CodedOutputStream
-            .computeInt64SizeNoTag(entries_.get(i));
-        }
-        size += dataSize;
-        if (!getEntriesList().isEmpty()) {
-          size += 1;
-          size += com.google.protobuf.CodedOutputStream
-              .computeInt32SizeNoTag(dataSize);
-        }
-        entriesMemoizedSerializedSize = dataSize;
+      for (int i = 0; i < entries_.size(); i++) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(5, entries_.get(i));
       }
       if (leaderCommit_ != 0L) {
         size += com.google.protobuf.CodedOutputStream
@@ -1603,6 +1599,7 @@ public final class Raft {
       private void maybeForceBuilderInitialization() {
         if (com.google.protobuf.GeneratedMessageV3
                 .alwaysUseFieldBuilders) {
+          getEntriesFieldBuilder();
         }
       }
       public Builder clear() {
@@ -1615,8 +1612,12 @@ public final class Raft {
 
         preLogTerm_ = 0L;
 
-        entries_ = java.util.Collections.emptyList();
-        bitField0_ = (bitField0_ & ~0x00000010);
+        if (entriesBuilder_ == null) {
+          entries_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000010);
+        } else {
+          entriesBuilder_.clear();
+        }
         leaderCommit_ = 0L;
 
         return this;
@@ -1647,11 +1648,15 @@ public final class Raft {
         result.leaderId_ = leaderId_;
         result.preLogIndex_ = preLogIndex_;
         result.preLogTerm_ = preLogTerm_;
-        if (((bitField0_ & 0x00000010) == 0x00000010)) {
-          entries_ = java.util.Collections.unmodifiableList(entries_);
-          bitField0_ = (bitField0_ & ~0x00000010);
+        if (entriesBuilder_ == null) {
+          if (((bitField0_ & 0x00000010) == 0x00000010)) {
+            entries_ = java.util.Collections.unmodifiableList(entries_);
+            bitField0_ = (bitField0_ & ~0x00000010);
+          }
+          result.entries_ = entries_;
+        } else {
+          result.entries_ = entriesBuilder_.build();
         }
-        result.entries_ = entries_;
         result.leaderCommit_ = leaderCommit_;
         result.bitField0_ = to_bitField0_;
         onBuilt();
@@ -1707,15 +1712,31 @@ public final class Raft {
         if (other.getPreLogTerm() != 0L) {
           setPreLogTerm(other.getPreLogTerm());
         }
-        if (!other.entries_.isEmpty()) {
-          if (entries_.isEmpty()) {
-            entries_ = other.entries_;
-            bitField0_ = (bitField0_ & ~0x00000010);
-          } else {
-            ensureEntriesIsMutable();
-            entries_.addAll(other.entries_);
+        if (entriesBuilder_ == null) {
+          if (!other.entries_.isEmpty()) {
+            if (entries_.isEmpty()) {
+              entries_ = other.entries_;
+              bitField0_ = (bitField0_ & ~0x00000010);
+            } else {
+              ensureEntriesIsMutable();
+              entries_.addAll(other.entries_);
+            }
+            onChanged();
           }
-          onChanged();
+        } else {
+          if (!other.entries_.isEmpty()) {
+            if (entriesBuilder_.isEmpty()) {
+              entriesBuilder_.dispose();
+              entriesBuilder_ = null;
+              entries_ = other.entries_;
+              bitField0_ = (bitField0_ & ~0x00000010);
+              entriesBuilder_ = 
+                com.google.protobuf.GeneratedMessageV3.alwaysUseFieldBuilders ?
+                   getEntriesFieldBuilder() : null;
+            } else {
+              entriesBuilder_.addAllMessages(other.entries_);
+            }
+          }
         }
         if (other.getLeaderCommit() != 0L) {
           setLeaderCommit(other.getLeaderCommit());
@@ -1851,70 +1872,244 @@ public final class Raft {
         return this;
       }
 
-      private java.util.List<java.lang.Long> entries_ = java.util.Collections.emptyList();
+      private java.util.List<grpc.Raft.Log> entries_ =
+        java.util.Collections.emptyList();
       private void ensureEntriesIsMutable() {
         if (!((bitField0_ & 0x00000010) == 0x00000010)) {
-          entries_ = new java.util.ArrayList<java.lang.Long>(entries_);
+          entries_ = new java.util.ArrayList<grpc.Raft.Log>(entries_);
           bitField0_ |= 0x00000010;
          }
       }
+
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          grpc.Raft.Log, grpc.Raft.Log.Builder, grpc.Raft.LogOrBuilder> entriesBuilder_;
+
       /**
-       * <code>repeated int64 entries = 5;</code>
+       * <code>repeated .Log entries = 5;</code>
        */
-      public java.util.List<java.lang.Long>
-          getEntriesList() {
-        return java.util.Collections.unmodifiableList(entries_);
+      public java.util.List<grpc.Raft.Log> getEntriesList() {
+        if (entriesBuilder_ == null) {
+          return java.util.Collections.unmodifiableList(entries_);
+        } else {
+          return entriesBuilder_.getMessageList();
+        }
       }
       /**
-       * <code>repeated int64 entries = 5;</code>
+       * <code>repeated .Log entries = 5;</code>
        */
       public int getEntriesCount() {
-        return entries_.size();
+        if (entriesBuilder_ == null) {
+          return entries_.size();
+        } else {
+          return entriesBuilder_.getCount();
+        }
       }
       /**
-       * <code>repeated int64 entries = 5;</code>
+       * <code>repeated .Log entries = 5;</code>
        */
-      public long getEntries(int index) {
-        return entries_.get(index);
+      public grpc.Raft.Log getEntries(int index) {
+        if (entriesBuilder_ == null) {
+          return entries_.get(index);
+        } else {
+          return entriesBuilder_.getMessage(index);
+        }
       }
       /**
-       * <code>repeated int64 entries = 5;</code>
+       * <code>repeated .Log entries = 5;</code>
        */
       public Builder setEntries(
-          int index, long value) {
-        ensureEntriesIsMutable();
-        entries_.set(index, value);
-        onChanged();
+          int index, grpc.Raft.Log value) {
+        if (entriesBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureEntriesIsMutable();
+          entries_.set(index, value);
+          onChanged();
+        } else {
+          entriesBuilder_.setMessage(index, value);
+        }
         return this;
       }
       /**
-       * <code>repeated int64 entries = 5;</code>
+       * <code>repeated .Log entries = 5;</code>
        */
-      public Builder addEntries(long value) {
-        ensureEntriesIsMutable();
-        entries_.add(value);
-        onChanged();
+      public Builder setEntries(
+          int index, grpc.Raft.Log.Builder builderForValue) {
+        if (entriesBuilder_ == null) {
+          ensureEntriesIsMutable();
+          entries_.set(index, builderForValue.build());
+          onChanged();
+        } else {
+          entriesBuilder_.setMessage(index, builderForValue.build());
+        }
         return this;
       }
       /**
-       * <code>repeated int64 entries = 5;</code>
+       * <code>repeated .Log entries = 5;</code>
+       */
+      public Builder addEntries(grpc.Raft.Log value) {
+        if (entriesBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureEntriesIsMutable();
+          entries_.add(value);
+          onChanged();
+        } else {
+          entriesBuilder_.addMessage(value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Log entries = 5;</code>
+       */
+      public Builder addEntries(
+          int index, grpc.Raft.Log value) {
+        if (entriesBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureEntriesIsMutable();
+          entries_.add(index, value);
+          onChanged();
+        } else {
+          entriesBuilder_.addMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Log entries = 5;</code>
+       */
+      public Builder addEntries(
+          grpc.Raft.Log.Builder builderForValue) {
+        if (entriesBuilder_ == null) {
+          ensureEntriesIsMutable();
+          entries_.add(builderForValue.build());
+          onChanged();
+        } else {
+          entriesBuilder_.addMessage(builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Log entries = 5;</code>
+       */
+      public Builder addEntries(
+          int index, grpc.Raft.Log.Builder builderForValue) {
+        if (entriesBuilder_ == null) {
+          ensureEntriesIsMutable();
+          entries_.add(index, builderForValue.build());
+          onChanged();
+        } else {
+          entriesBuilder_.addMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Log entries = 5;</code>
        */
       public Builder addAllEntries(
-          java.lang.Iterable<? extends java.lang.Long> values) {
-        ensureEntriesIsMutable();
-        com.google.protobuf.AbstractMessageLite.Builder.addAll(
-            values, entries_);
-        onChanged();
+          java.lang.Iterable<? extends grpc.Raft.Log> values) {
+        if (entriesBuilder_ == null) {
+          ensureEntriesIsMutable();
+          com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, entries_);
+          onChanged();
+        } else {
+          entriesBuilder_.addAllMessages(values);
+        }
         return this;
       }
       /**
-       * <code>repeated int64 entries = 5;</code>
+       * <code>repeated .Log entries = 5;</code>
        */
       public Builder clearEntries() {
-        entries_ = java.util.Collections.emptyList();
-        bitField0_ = (bitField0_ & ~0x00000010);
-        onChanged();
+        if (entriesBuilder_ == null) {
+          entries_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000010);
+          onChanged();
+        } else {
+          entriesBuilder_.clear();
+        }
         return this;
+      }
+      /**
+       * <code>repeated .Log entries = 5;</code>
+       */
+      public Builder removeEntries(int index) {
+        if (entriesBuilder_ == null) {
+          ensureEntriesIsMutable();
+          entries_.remove(index);
+          onChanged();
+        } else {
+          entriesBuilder_.remove(index);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .Log entries = 5;</code>
+       */
+      public grpc.Raft.Log.Builder getEntriesBuilder(
+          int index) {
+        return getEntriesFieldBuilder().getBuilder(index);
+      }
+      /**
+       * <code>repeated .Log entries = 5;</code>
+       */
+      public grpc.Raft.LogOrBuilder getEntriesOrBuilder(
+          int index) {
+        if (entriesBuilder_ == null) {
+          return entries_.get(index);  } else {
+          return entriesBuilder_.getMessageOrBuilder(index);
+        }
+      }
+      /**
+       * <code>repeated .Log entries = 5;</code>
+       */
+      public java.util.List<? extends grpc.Raft.LogOrBuilder> 
+           getEntriesOrBuilderList() {
+        if (entriesBuilder_ != null) {
+          return entriesBuilder_.getMessageOrBuilderList();
+        } else {
+          return java.util.Collections.unmodifiableList(entries_);
+        }
+      }
+      /**
+       * <code>repeated .Log entries = 5;</code>
+       */
+      public grpc.Raft.Log.Builder addEntriesBuilder() {
+        return getEntriesFieldBuilder().addBuilder(
+            grpc.Raft.Log.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .Log entries = 5;</code>
+       */
+      public grpc.Raft.Log.Builder addEntriesBuilder(
+          int index) {
+        return getEntriesFieldBuilder().addBuilder(
+            index, grpc.Raft.Log.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .Log entries = 5;</code>
+       */
+      public java.util.List<grpc.Raft.Log.Builder> 
+           getEntriesBuilderList() {
+        return getEntriesFieldBuilder().getBuilderList();
+      }
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          grpc.Raft.Log, grpc.Raft.Log.Builder, grpc.Raft.LogOrBuilder> 
+          getEntriesFieldBuilder() {
+        if (entriesBuilder_ == null) {
+          entriesBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
+              grpc.Raft.Log, grpc.Raft.Log.Builder, grpc.Raft.LogOrBuilder>(
+                  entries_,
+                  ((bitField0_ & 0x00000010) == 0x00000010),
+                  getParentForChildren(),
+                  isClean());
+          entries_ = null;
+        }
+        return entriesBuilder_;
       }
 
       private long leaderCommit_ ;
@@ -2485,6 +2680,703 @@ public final class Raft {
 
   }
 
+  public interface LogOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:Log)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>int64 index = 1;</code>
+     */
+    long getIndex();
+
+    /**
+     * <code>int64 term = 2;</code>
+     */
+    long getTerm();
+
+    /**
+     * <code>bytes data = 3;</code>
+     */
+    com.google.protobuf.ByteString getData();
+
+    /**
+     * <code>string peer = 4;</code>
+     */
+    java.lang.String getPeer();
+    /**
+     * <code>string peer = 4;</code>
+     */
+    com.google.protobuf.ByteString
+        getPeerBytes();
+  }
+  /**
+   * Protobuf type {@code Log}
+   */
+  public  static final class Log extends
+      com.google.protobuf.GeneratedMessageV3 implements
+      // @@protoc_insertion_point(message_implements:Log)
+      LogOrBuilder {
+    // Use Log.newBuilder() to construct.
+    private Log(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+      super(builder);
+    }
+    private Log() {
+      index_ = 0L;
+      term_ = 0L;
+      data_ = com.google.protobuf.ByteString.EMPTY;
+      peer_ = "";
+    }
+
+    @java.lang.Override
+    public final com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    }
+    private Log(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      this();
+      int mutable_bitField0_ = 0;
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!input.skipField(tag)) {
+                done = true;
+              }
+              break;
+            }
+            case 8: {
+
+              index_ = input.readInt64();
+              break;
+            }
+            case 16: {
+
+              term_ = input.readInt64();
+              break;
+            }
+            case 26: {
+
+              data_ = input.readBytes();
+              break;
+            }
+            case 34: {
+              java.lang.String s = input.readStringRequireUtf8();
+
+              peer_ = s;
+              break;
+            }
+          }
+        }
+      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+        throw e.setUnfinishedMessage(this);
+      } catch (java.io.IOException e) {
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
+      } finally {
+        makeExtensionsImmutable();
+      }
+    }
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return grpc.Raft.internal_static_Log_descriptor;
+    }
+
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return grpc.Raft.internal_static_Log_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              grpc.Raft.Log.class, grpc.Raft.Log.Builder.class);
+    }
+
+    public static final int INDEX_FIELD_NUMBER = 1;
+    private long index_;
+    /**
+     * <code>int64 index = 1;</code>
+     */
+    public long getIndex() {
+      return index_;
+    }
+
+    public static final int TERM_FIELD_NUMBER = 2;
+    private long term_;
+    /**
+     * <code>int64 term = 2;</code>
+     */
+    public long getTerm() {
+      return term_;
+    }
+
+    public static final int DATA_FIELD_NUMBER = 3;
+    private com.google.protobuf.ByteString data_;
+    /**
+     * <code>bytes data = 3;</code>
+     */
+    public com.google.protobuf.ByteString getData() {
+      return data_;
+    }
+
+    public static final int PEER_FIELD_NUMBER = 4;
+    private volatile java.lang.Object peer_;
+    /**
+     * <code>string peer = 4;</code>
+     */
+    public java.lang.String getPeer() {
+      java.lang.Object ref = peer_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        peer_ = s;
+        return s;
+      }
+    }
+    /**
+     * <code>string peer = 4;</code>
+     */
+    public com.google.protobuf.ByteString
+        getPeerBytes() {
+      java.lang.Object ref = peer_;
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        peer_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (index_ != 0L) {
+        output.writeInt64(1, index_);
+      }
+      if (term_ != 0L) {
+        output.writeInt64(2, term_);
+      }
+      if (!data_.isEmpty()) {
+        output.writeBytes(3, data_);
+      }
+      if (!getPeerBytes().isEmpty()) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 4, peer_);
+      }
+    }
+
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (index_ != 0L) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt64Size(1, index_);
+      }
+      if (term_ != 0L) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt64Size(2, term_);
+      }
+      if (!data_.isEmpty()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBytesSize(3, data_);
+      }
+      if (!getPeerBytes().isEmpty()) {
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(4, peer_);
+      }
+      memoizedSize = size;
+      return size;
+    }
+
+    private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof grpc.Raft.Log)) {
+        return super.equals(obj);
+      }
+      grpc.Raft.Log other = (grpc.Raft.Log) obj;
+
+      boolean result = true;
+      result = result && (getIndex()
+          == other.getIndex());
+      result = result && (getTerm()
+          == other.getTerm());
+      result = result && getData()
+          .equals(other.getData());
+      result = result && getPeer()
+          .equals(other.getPeer());
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      hash = (37 * hash) + INDEX_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          getIndex());
+      hash = (37 * hash) + TERM_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          getTerm());
+      hash = (37 * hash) + DATA_FIELD_NUMBER;
+      hash = (53 * hash) + getData().hashCode();
+      hash = (37 * hash) + PEER_FIELD_NUMBER;
+      hash = (53 * hash) + getPeer().hashCode();
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static grpc.Raft.Log parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static grpc.Raft.Log parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static grpc.Raft.Log parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static grpc.Raft.Log parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static grpc.Raft.Log parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static grpc.Raft.Log parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static grpc.Raft.Log parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+    public static grpc.Raft.Log parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static grpc.Raft.Log parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static grpc.Raft.Log parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(grpc.Raft.Log prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * Protobuf type {@code Log}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:Log)
+        grpc.Raft.LogOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return grpc.Raft.internal_static_Log_descriptor;
+      }
+
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return grpc.Raft.internal_static_Log_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                grpc.Raft.Log.class, grpc.Raft.Log.Builder.class);
+      }
+
+      // Construct using grpc.Raft.Log.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        index_ = 0L;
+
+        term_ = 0L;
+
+        data_ = com.google.protobuf.ByteString.EMPTY;
+
+        peer_ = "";
+
+        return this;
+      }
+
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return grpc.Raft.internal_static_Log_descriptor;
+      }
+
+      public grpc.Raft.Log getDefaultInstanceForType() {
+        return grpc.Raft.Log.getDefaultInstance();
+      }
+
+      public grpc.Raft.Log build() {
+        grpc.Raft.Log result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public grpc.Raft.Log buildPartial() {
+        grpc.Raft.Log result = new grpc.Raft.Log(this);
+        result.index_ = index_;
+        result.term_ = term_;
+        result.data_ = data_;
+        result.peer_ = peer_;
+        onBuilt();
+        return result;
+      }
+
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof grpc.Raft.Log) {
+          return mergeFrom((grpc.Raft.Log)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(grpc.Raft.Log other) {
+        if (other == grpc.Raft.Log.getDefaultInstance()) return this;
+        if (other.getIndex() != 0L) {
+          setIndex(other.getIndex());
+        }
+        if (other.getTerm() != 0L) {
+          setTerm(other.getTerm());
+        }
+        if (other.getData() != com.google.protobuf.ByteString.EMPTY) {
+          setData(other.getData());
+        }
+        if (!other.getPeer().isEmpty()) {
+          peer_ = other.peer_;
+          onChanged();
+        }
+        onChanged();
+        return this;
+      }
+
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        grpc.Raft.Log parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (grpc.Raft.Log) e.getUnfinishedMessage();
+          throw e.unwrapIOException();
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+
+      private long index_ ;
+      /**
+       * <code>int64 index = 1;</code>
+       */
+      public long getIndex() {
+        return index_;
+      }
+      /**
+       * <code>int64 index = 1;</code>
+       */
+      public Builder setIndex(long value) {
+        
+        index_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>int64 index = 1;</code>
+       */
+      public Builder clearIndex() {
+        
+        index_ = 0L;
+        onChanged();
+        return this;
+      }
+
+      private long term_ ;
+      /**
+       * <code>int64 term = 2;</code>
+       */
+      public long getTerm() {
+        return term_;
+      }
+      /**
+       * <code>int64 term = 2;</code>
+       */
+      public Builder setTerm(long value) {
+        
+        term_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>int64 term = 2;</code>
+       */
+      public Builder clearTerm() {
+        
+        term_ = 0L;
+        onChanged();
+        return this;
+      }
+
+      private com.google.protobuf.ByteString data_ = com.google.protobuf.ByteString.EMPTY;
+      /**
+       * <code>bytes data = 3;</code>
+       */
+      public com.google.protobuf.ByteString getData() {
+        return data_;
+      }
+      /**
+       * <code>bytes data = 3;</code>
+       */
+      public Builder setData(com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  
+        data_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>bytes data = 3;</code>
+       */
+      public Builder clearData() {
+        
+        data_ = getDefaultInstance().getData();
+        onChanged();
+        return this;
+      }
+
+      private java.lang.Object peer_ = "";
+      /**
+       * <code>string peer = 4;</code>
+       */
+      public java.lang.String getPeer() {
+        java.lang.Object ref = peer_;
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          peer_ = s;
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <code>string peer = 4;</code>
+       */
+      public com.google.protobuf.ByteString
+          getPeerBytes() {
+        java.lang.Object ref = peer_;
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          peer_ = b;
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <code>string peer = 4;</code>
+       */
+      public Builder setPeer(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  
+        peer_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string peer = 4;</code>
+       */
+      public Builder clearPeer() {
+        
+        peer_ = getDefaultInstance().getPeer();
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string peer = 4;</code>
+       */
+      public Builder setPeerBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+        
+        peer_ = value;
+        onChanged();
+        return this;
+      }
+      public final Builder setUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+      public final Builder mergeUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:Log)
+    }
+
+    // @@protoc_insertion_point(class_scope:Log)
+    private static final grpc.Raft.Log DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new grpc.Raft.Log();
+    }
+
+    public static grpc.Raft.Log getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<Log>
+        PARSER = new com.google.protobuf.AbstractParser<Log>() {
+      public Log parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+          return new Log(input, extensionRegistry);
+      }
+    };
+
+    public static com.google.protobuf.Parser<Log> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<Log> getParserForType() {
+      return PARSER;
+    }
+
+    public grpc.Raft.Log getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_RequestVoteReq_descriptor;
   private static final 
@@ -2505,6 +3397,11 @@ public final class Raft {
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_AppendEntriesResp_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_Log_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_Log_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -2518,15 +3415,17 @@ public final class Raft {
       " \001(\003\022\024\n\014candidate_id\030\002 \001(\005\022\026\n\016last_log_i" +
       "ndex\030\003 \001(\003\022\025\n\rlast_log_term\030\004 \001(\003\"5\n\017Req" +
       "uestVoteResp\022\014\n\004term\030\001 \001(\003\022\024\n\014vote_grant" +
-      "ed\030\002 \001(\010\"\210\001\n\020AppendEntriesReq\022\014\n\004term\030\001 " +
+      "ed\030\002 \001(\010\"\216\001\n\020AppendEntriesReq\022\014\n\004term\030\001 " +
       "\001(\003\022\021\n\tleader_id\030\002 \001(\005\022\025\n\rpre_log_index\030" +
-      "\003 \001(\003\022\024\n\014pre_log_term\030\004 \001(\003\022\017\n\007entries\030\005" +
-      " \003(\003\022\025\n\rleader_commit\030\006 \001(\003\"2\n\021AppendEnt" +
-      "riesResp\022\014\n\004term\030\001 \001(\003\022\017\n\007success\030\002 \001(\0102" +
-      "{\n\017RaftCommService\0220\n\013RequestVote\022\017.Requ",
-      "estVoteReq\032\020.RequestVoteResp\0226\n\rAppendEn" +
-      "tries\022\021.AppendEntriesReq\032\022.AppendEntries" +
-      "RespB\006\n\004grpcb\006proto3"
+      "\003 \001(\003\022\024\n\014pre_log_term\030\004 \001(\003\022\025\n\007entries\030\005" +
+      " \003(\0132\004.Log\022\025\n\rleader_commit\030\006 \001(\003\"2\n\021App" +
+      "endEntriesResp\022\014\n\004term\030\001 \001(\003\022\017\n\007success\030" +
+      "\002 \001(\010\">\n\003Log\022\r\n\005index\030\001 \001(\003\022\014\n\004term\030\002 \001(",
+      "\003\022\014\n\004data\030\003 \001(\014\022\014\n\004peer\030\004 \001(\t2{\n\017RaftCom" +
+      "mService\0220\n\013RequestVote\022\017.RequestVoteReq" +
+      "\032\020.RequestVoteResp\0226\n\rAppendEntries\022\021.Ap" +
+      "pendEntriesReq\032\022.AppendEntriesRespB\006\n\004gr" +
+      "pcb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -2564,6 +3463,12 @@ public final class Raft {
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_AppendEntriesResp_descriptor,
         new java.lang.String[] { "Term", "Success", });
+    internal_static_Log_descriptor =
+      getDescriptor().getMessageTypes().get(4);
+    internal_static_Log_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_Log_descriptor,
+        new java.lang.String[] { "Index", "Term", "Data", "Peer", });
   }
 
   // @@protoc_insertion_point(outer_class_scope)

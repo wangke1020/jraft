@@ -23,11 +23,18 @@ message AppendEntriesReq {
     int32 leader_id = 2;
     int64 pre_log_index = 3;
     int64 pre_log_term = 4;
-    repeated int64 entries = 5;
+    repeated Log entries = 5;
     int64 leader_commit = 6;
 }
 
 message AppendEntriesResp {
     int64 term = 1;
     bool success = 2;
+}
+
+message Log {
+    int64 index = 1;
+    int64 term = 2;
+    bytes data = 3;
+    string peer = 4;
 }

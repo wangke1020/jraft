@@ -1,9 +1,7 @@
 package io.github.jraft;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -14,10 +12,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import grpc.Raft.AppendEntriesReq;
-import grpc.Raft.AppendEntriesResp;
-import grpc.Raft.RequestVoteReq;
-import grpc.Raft.RequestVoteResp;
+import grpc.Raft;
+import grpc.Raft.*;
 import grpc.RaftCommServiceGrpc;
 import grpc.RaftCommServiceGrpc.RaftCommServiceFutureStub;
 import io.grpc.Channel;
@@ -49,6 +45,10 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     private int grantedVotes_;
     private long commitIndex_;
     private long lastApplied_;
+    private LogStore logStore_;
+
+    private long[] nextIndex_;
+    private long[] matchIndex_;
     
 
     private Server gRpcServer_;
@@ -67,6 +67,9 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         voteFor_ = null;
         currentTerm_ = new AtomicLong(0);
         grantedVotes_ = 0;
+        commitIndex_ = 0;
+        lastApplied_ = 0;
+        logStore_ = new LeveldbLogStore(Config.persistenceFilePathPrefix + id);
     
         timeoutLock_ = new ReentrantLock();
         timeoutCond_ = timeoutLock_.newCondition();
@@ -120,13 +123,13 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     }
     
     
-    private int getFollowerTimeoutSec() {
-        return (new Random().nextInt(Config.timeoutMaxSec - Config.timeoutMinSec)
-                + Config.timeoutMinSec + 1);
+    private int getFollowerTimeoutMillSec() {
+        return (new Random().nextInt(150)
+                + Config.FollowerTimeoutSec * 1000 + 1);
     }
     
-    private int getCandidateTimeoutSec() {
-        return Config.CandidateTimeoutSec;
+    private int getCandidateTimeoutMilliSec() {
+        return Config.CandidateTimeoutSec * 1000;
     }
     
     private int getQuorumNum() {
@@ -137,19 +140,19 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     
     private void runFollower() {
  
-        int followerTimeoutSec = getFollowerTimeoutSec();
-        debug("in follower state, await secs: " + followerTimeoutSec);
-        awaitFor(followerTimeoutSec);
+        int followerTimeoutMilliSec = getFollowerTimeoutMillSec();
+        debug("in follower state, await secs: " + followerTimeoutMilliSec);
+        awaitFor(followerTimeoutMilliSec);
     
         debug("follower timeout, become candidate");
         state_.set(State.Candidate);
         
     }
     
-    private void awaitFor(int seconds) {
+    private void awaitFor(int millSecs) {
         try {
             timeoutLock_.lock();
-            while (timeoutCond_.await(seconds, TimeUnit.SECONDS)) {
+            while (timeoutCond_.await(millSecs, TimeUnit.MILLISECONDS)) {
             }
         }catch (Exception e) {
             e.printStackTrace();
@@ -157,6 +160,14 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         finally {
             timeoutLock_.unlock();
         }
+    }
+
+    private void reinitLeaderStates() {
+        nextIndex_ = new long[cluster_.size()];
+        for(int i=0;i<cluster_.size();++i)
+            nextIndex_[i] = commitIndex_ + 1;
+
+        matchIndex_ = new long[cluster_.size()];
     }
     
     private void startCandidateSate() {
@@ -205,7 +216,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                     if(resp.getVoteGranted()) {
                         debug("quorumNum: " + getQuorumNum());
                         if(++grantedVotes_ >= getQuorumNum()) {
-                            state_.set(State.Leader);
+                            becomeLeader();
                             debug("got quorum votes, become leader");
                             return;
                         }
@@ -219,9 +230,13 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
             }
         });
     
-        awaitFor(getCandidateTimeoutSec());
+        awaitFor(getCandidateTimeoutMilliSec());
     }
-    
+
+    private void becomeLeader() {
+        state_.set(State.Leader);
+        reinitLeaderStates();
+    }
     
     private void runLeader() {
         AppendEntriesReq req = AppendEntriesReq.newBuilder()
@@ -236,7 +251,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                 stub.appendEntries(req);
             }
         }
-        awaitFor(Config.leaderHbIntervalSec);
+        awaitFor(Config.leaderHbIntervalSec * 1000);
     }
     
     @Override
@@ -248,17 +263,17 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
 //        debug("current state: " + state_.get() +
 ////                ", current term: " + currentTerm_.get() + ", req term: " + req.getTerm() + ", voteFor: " + voteFor_);
 
-        if(req.getTerm() >= currentTerm_.get() &&
-                (voteFor_ == null || voteFor_ == req.getCandidateId())) {
-            if(req.getTerm() > currentTerm_.get()) {
-                currentTerm_.set(req.getTerm());
-                if(!state_.equals(State.Follower)) {
-                    state_.set(State.Follower);
-                    signalTimeoutCond();
-                }
-            }
+        if(req.getTerm() > currentTerm_.get()) {
             currentTerm_.set(req.getTerm());
-            
+            if(!state_.equals(State.Follower)) {
+                state_.set(State.Follower);
+                signalTimeoutCond();
+            }
+            respBuilder.setVoteGranted(true);
+            voteFor_ = req.getCandidateId();
+        }else if(req.getTerm() == currentTerm_.get() &&
+                (voteFor_ == null || voteFor_ == req.getCandidateId())) {
+
             respBuilder.setVoteGranted(true);
             voteFor_ = req.getCandidateId();
         }else {
@@ -297,24 +312,39 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
            switch (state_.get()) {
                case Follower:
                    signalTimeoutCond();
-                   voteFor_ = null;
-                   // TODO: process log replication
+                   Log log =  logStore_.getLog(req.getPreLogIndex());
+                   if(log == null || log.getTerm() != req.getPreLogTerm())
+                        respBuilder.setSuccess(false);
+                   else{
+                       List<Log> logs = req.getEntriesList();
+                       logStore_.storeLog(logs);
+
+                       if(req.getLeaderCommit() > commitIndex_) {
+                           commitIndex_ = Math.max(req.getLeaderCommit(), logStore_.getLastIndex());
+                       }
+                       respBuilder.setSuccess(true);
+                   }
+
                    break;
                case Candidate:
                    signalTimeoutCond();
                    state_.set(State.Follower);
+                   currentTerm_.set(req.getTerm());
+                   respBuilder.setSuccess(true);
                    break;
                case Leader:
                    signalTimeoutCond();
                    state_.set(State.Follower);
+                   currentTerm_.set(req.getTerm());
+                   respBuilder.setSuccess(true);
                    break;
                default:
                    break;
            }
-           currentTerm_.set(req.getTerm());
-           respBuilder.setSuccess(true);
+
        }
-        
+
+
         responseObserver.onNext(respBuilder.build());
         responseObserver.onCompleted();
     }

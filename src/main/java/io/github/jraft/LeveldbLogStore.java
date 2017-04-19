@@ -1,6 +1,9 @@
 package io.github.jraft;
 
 import java.util.List;
+
+import com.google.protobuf.InvalidProtocolBufferException;
+import grpc.Raft;
 import org.iq80.leveldb.*;
 import static org.fusesource.leveldbjni.JniDBFactory.*;
 import java.io.*;
@@ -82,15 +85,21 @@ public class LeveldbLogStore implements LogStore, Closeable {
     }
     
     @Override
-    public Log getLog(long index) {
+    public Raft.Log getLog(long index) {
         byte[] value = db_.get(getKeyBytes(index));
-        return Log.deserialize(value);
+        if(value == null) return null;
+        try {
+            return Raft.Log.parseFrom(value);
+        } catch (InvalidProtocolBufferException e) {
+            e.printStackTrace();
+            return null;
+        }
     }
     
     @Override
-    public void storeLog(List<Log> logs) {
-        for(Log log : logs) {
-            db_.put(getKeyBytes(log.getIndex()), log.serialize());
+    public void storeLog(List<Raft.Log> logs) {
+        for(Raft.Log log : logs) {
+            db_.put(getKeyBytes(log.getIndex()), log.toByteArray());
         }
     }
     
