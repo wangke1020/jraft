@@ -45,6 +45,15 @@ public final class RaftCommServiceGrpc {
               "RaftCommService", "AppendEntries"),
           io.grpc.protobuf.ProtoUtils.marshaller(grpc.Raft.AppendEntriesReq.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(grpc.Raft.AppendEntriesResp.getDefaultInstance()));
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
+  public static final io.grpc.MethodDescriptor<grpc.Raft.ClientReq,
+      grpc.Raft.ClientResp> METHOD_CLIENT_OPERATE =
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.UNARY,
+          generateFullMethodName(
+              "RaftCommService", "ClientOperate"),
+          io.grpc.protobuf.ProtoUtils.marshaller(grpc.Raft.ClientReq.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(grpc.Raft.ClientResp.getDefaultInstance()));
 
   /**
    * Creates a new async stub that supports all call types for the service
@@ -87,6 +96,13 @@ public final class RaftCommServiceGrpc {
       asyncUnimplementedUnaryCall(METHOD_APPEND_ENTRIES, responseObserver);
     }
 
+    /**
+     */
+    public void clientOperate(grpc.Raft.ClientReq request,
+        io.grpc.stub.StreamObserver<grpc.Raft.ClientResp> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_CLIENT_OPERATE, responseObserver);
+    }
+
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
@@ -103,6 +119,13 @@ public final class RaftCommServiceGrpc {
                 grpc.Raft.AppendEntriesReq,
                 grpc.Raft.AppendEntriesResp>(
                   this, METHODID_APPEND_ENTRIES)))
+          .addMethod(
+            METHOD_CLIENT_OPERATE,
+            asyncUnaryCall(
+              new MethodHandlers<
+                grpc.Raft.ClientReq,
+                grpc.Raft.ClientResp>(
+                  this, METHODID_CLIENT_OPERATE)))
           .build();
     }
   }
@@ -140,6 +163,14 @@ public final class RaftCommServiceGrpc {
       asyncUnaryCall(
           getChannel().newCall(METHOD_APPEND_ENTRIES, getCallOptions()), request, responseObserver);
     }
+
+    /**
+     */
+    public void clientOperate(grpc.Raft.ClientReq request,
+        io.grpc.stub.StreamObserver<grpc.Raft.ClientResp> responseObserver) {
+      asyncUnaryCall(
+          getChannel().newCall(METHOD_CLIENT_OPERATE, getCallOptions()), request, responseObserver);
+    }
   }
 
   /**
@@ -172,6 +203,13 @@ public final class RaftCommServiceGrpc {
     public grpc.Raft.AppendEntriesResp appendEntries(grpc.Raft.AppendEntriesReq request) {
       return blockingUnaryCall(
           getChannel(), METHOD_APPEND_ENTRIES, getCallOptions(), request);
+    }
+
+    /**
+     */
+    public grpc.Raft.ClientResp clientOperate(grpc.Raft.ClientReq request) {
+      return blockingUnaryCall(
+          getChannel(), METHOD_CLIENT_OPERATE, getCallOptions(), request);
     }
   }
 
@@ -208,10 +246,19 @@ public final class RaftCommServiceGrpc {
       return futureUnaryCall(
           getChannel().newCall(METHOD_APPEND_ENTRIES, getCallOptions()), request);
     }
+
+    /**
+     */
+    public com.google.common.util.concurrent.ListenableFuture<grpc.Raft.ClientResp> clientOperate(
+        grpc.Raft.ClientReq request) {
+      return futureUnaryCall(
+          getChannel().newCall(METHOD_CLIENT_OPERATE, getCallOptions()), request);
+    }
   }
 
   private static final int METHODID_REQUEST_VOTE = 0;
   private static final int METHODID_APPEND_ENTRIES = 1;
+  private static final int METHODID_CLIENT_OPERATE = 2;
 
   private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
@@ -237,6 +284,10 @@ public final class RaftCommServiceGrpc {
         case METHODID_APPEND_ENTRIES:
           serviceImpl.appendEntries((grpc.Raft.AppendEntriesReq) request,
               (io.grpc.stub.StreamObserver<grpc.Raft.AppendEntriesResp>) responseObserver);
+          break;
+        case METHODID_CLIENT_OPERATE:
+          serviceImpl.clientOperate((grpc.Raft.ClientReq) request,
+              (io.grpc.stub.StreamObserver<grpc.Raft.ClientResp>) responseObserver);
           break;
         default:
           throw new AssertionError();
@@ -273,6 +324,7 @@ public final class RaftCommServiceGrpc {
               .setSchemaDescriptor(new RaftCommServiceDescriptorSupplier())
               .addMethod(METHOD_REQUEST_VOTE)
               .addMethod(METHOD_APPEND_ENTRIES)
+              .addMethod(METHOD_CLIENT_OPERATE)
               .build();
         }
       }
