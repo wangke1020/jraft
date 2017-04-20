@@ -7,8 +7,11 @@ dependencies {
     compile 'io.grpc:grpc-netty:1.2.0'
     compile 'io.grpc:grpc-protobuf:1.2.0'
     compile 'io.grpc:grpc-stub:1.2.0'
-    compile "org.fusesource.leveldbjni:leveldbjni-linux64:1.8"
-    compile "org.apache.commons:commons-lang3:3.5"
+    compile 'org.fusesource.leveldbjni:leveldbjni-linux64:1.8'
+    compile 'org.apache.commons:commons-lang3:3.5'
+
+    compile 'org.apache.logging.log4j:log4j-api:2.8.2'
+    compile 'org.apache.logging.log4j:log4j-core:2.8.2'
 
     testCompile "org.fusesource.leveldbjni:leveldbjni-linux64:1.8"
     testCompile "junit:junit:4.11"

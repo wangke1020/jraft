@@ -4,6 +4,7 @@ option java_package = 'grpc';
 service RaftCommService {
     rpc RequestVote(RequestVoteReq) returns (RequestVoteResp);
     rpc AppendEntries(AppendEntriesReq) returns (AppendEntriesResp);
+    rpc ClientOperate(ClientReq) returns (ClientResp);
 }
 
 message RequestVoteReq {
@@ -37,4 +38,19 @@ message Log {
     int64 term = 2;
     bytes data = 3;
     string peer = 4;
+}
+
+enum Op {
+    Put = 0;
+}
+
+message ClientReq {
+    Op op = 1;
+    repeated string args = 2;
+}
+
+message ClientResp {
+    bool success = 1;
+    string result = 2;
+    string error = 3;
 }

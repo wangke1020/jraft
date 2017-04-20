@@ -2,17 +2,15 @@ package io.github.jraft;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
-import grpc.Raft;
+import com.google.common.collect.ImmutableList;
+import com.google.common.util.concurrent.*;
+import com.google.protobuf.ByteString;
 import grpc.Raft.*;
 import grpc.RaftCommServiceGrpc;
 import grpc.RaftCommServiceGrpc.RaftCommServiceFutureStub;
@@ -21,26 +19,29 @@ import io.grpc.Server;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.config.Configurator;
+
 import javax.annotation.Nullable;
 
 
 public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
-    
+    private static final Logger logger_ = LogManager.getLogger(Node.class);
     enum State {
         Follower,
         Candidate,
         Leader,
         Shutdown
     }
-
-    private int id_;
-    private final List<Node> cluster_;
+    
+    private final List<Endpoint> cluster_;
     private Integer voteFor_;
     private AtomicLong currentTerm_;
 
     private AtomicReference<State> state_;
-    private String host_;
-    private int port_;
+    private Endpoint endpoint_;
 
     private int grantedVotes_;
     private long commitIndex_;
@@ -54,22 +55,23 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     private Server gRpcServer_;
     private Lock timeoutLock_;
     private Condition timeoutCond_;
-    private Thread loopThread_;
     private boolean isRunning_;
+    private FSM fsm_;
+    
 
-    public Node(int id, String host, int port, List<Node> cluster) throws IOException, InterruptedException {
-        id_ = id;
-        port_ = port;
-        host_ = host;
+    public Node(Endpoint endpoint, List<Endpoint> cluster) throws IOException, InterruptedException {
+        endpoint_ = endpoint;
         cluster_ = cluster;
 
         state_ = new AtomicReference<>(State.Follower);
         voteFor_ = null;
         currentTerm_ = new AtomicLong(0);
         grantedVotes_ = 0;
-        commitIndex_ = 0;
+
+        logStore_ = new LeveldbLogStore(Config.persistenceFilePathPrefix + getId());
+        commitIndex_ = logStore_.getLastIndex();
         lastApplied_ = 0;
-        logStore_ = new LeveldbLogStore(Config.persistenceFilePathPrefix + id);
+        fsm_ = new FSM();
     
         timeoutLock_ = new ReentrantLock();
         timeoutCond_ = timeoutLock_.newCondition();
@@ -80,16 +82,20 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         
     }
     
+    public Endpoint getEndpoint() {
+        return endpoint_;
+    }
+    
     public String getHost() {
-        return host_;
+        return endpoint_.getHost();
     }
     
     public int getPort() {
-        return port_;
+        return endpoint_.getPort();
     }
     
     public int getId() {
-        return id_;
+        return endpoint_.getId();
     }
     
     public State getState() {
@@ -98,8 +104,8 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     
     public void startLoopThread() {
     
-        loopThread_ = new Thread(() -> {
-            while(isRunning_) {
+        Thread loopThread = new Thread(() -> {
+            while (isRunning_) {
                 switch (state_.get()) {
                     case Follower:
                         runFollower();
@@ -115,13 +121,20 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                 }
             }
         });
-        loopThread_.start();
+        loopThread.start();
     }
     
     private void debug(String str) {
-        System.out.println("node " + id_ + ": " + str);
+        logger_.debug("node " + getId() + ": " + str);
     }
     
+    private boolean isLeader() {
+        return state_.get().equals(State.Leader);
+    }
+    
+    private boolean isFollower() {
+        return state_.get().equals(State.Follower);
+    }
     
     private int getFollowerTimeoutMillSec() {
         return (new Random().nextInt(150)
@@ -165,7 +178,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     private void reinitLeaderStates() {
         nextIndex_ = new long[cluster_.size()];
         for(int i=0;i<cluster_.size();++i)
-            nextIndex_[i] = commitIndex_ + 1;
+            nextIndex_[i] = 0;
 
         matchIndex_ = new long[cluster_.size()];
     }
@@ -181,18 +194,16 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     
         RequestVoteReq req = RequestVoteReq.newBuilder()
                 .setTerm(currentTerm_.get())
-                .setCandidateId(id_)
+                .setCandidateId(getId())
                 .build();
         
         List<ListenableFuture<RequestVoteResp>> futures = new ArrayList<>();
-        for(Node n : cluster_) {
-            if(n.getId() != id_) {
-                Channel channel = NettyChannelBuilder.forAddress(n.getHost(), n.getPort())
-                        .negotiationType(NegotiationType.PLAINTEXT)
-                        .build();
-                RaftCommServiceFutureStub stub = RaftCommServiceGrpc.newFutureStub(channel);
-                futures.add(stub.requestVote(req));
-            }
+        for(Endpoint ep : getOthers()) {
+            Channel channel = NettyChannelBuilder.forAddress(ep.getHost(), ep.getPort())
+                    .negotiationType(NegotiationType.PLAINTEXT)
+                    .build();
+            RaftCommServiceFutureStub stub = RaftCommServiceGrpc.newFutureStub(channel);
+            futures.add(stub.requestVote(req));
         }
     
         ListenableFuture<List<RequestVoteResp>> successfulReq = Futures.successfulAsList(futures);
@@ -239,19 +250,25 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     }
     
     private void runLeader() {
-        AppendEntriesReq req = AppendEntriesReq.newBuilder()
-                .setTerm(currentTerm_.get()).build();
-        debug("I am leader, send heartbeat");
-        for(Node n : cluster_) {
-            if (n.getId() != id_) {
-                debug("node " + n.id_  + " is in state: " + n.getState());
-                Channel channel = NettyChannelBuilder.forAddress(n.getHost(), n.getPort()).
-                        negotiationType(NegotiationType.PLAINTEXT).build();
-                RaftCommServiceFutureStub stub = RaftCommServiceGrpc.newFutureStub(channel);
-                stub.appendEntries(req);
-            }
-        }
+        sendHeartbeat();
         awaitFor(Config.leaderHbIntervalSec * 1000);
+    }
+    
+    private List<ListenableFuture<AppendEntriesResp>> sendHeartbeat() {
+        AppendEntriesReq req = AppendEntriesReq.newBuilder()
+                .setTerm(currentTerm_.get())
+                .setLeaderCommit(commitIndex_)
+                .build();
+        debug("I am leader, send heartbeat");
+        List<ListenableFuture<AppendEntriesResp>> futures = new LinkedList<>();
+        for(Endpoint ep : getOthers()) {
+            Channel channel = NettyChannelBuilder.forAddress(ep.getHost(), ep.getPort()).
+                    negotiationType(NegotiationType.PLAINTEXT).build();
+            RaftCommServiceFutureStub stub = RaftCommServiceGrpc.newFutureStub(channel);
+            futures.add(stub.appendEntries(req));
+        }
+        
+        return futures;
     }
     
     @Override
@@ -305,53 +322,201 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
        
        // When a leader unavailable, new leader is elected, after old leader come back,
         // it will still think it's leader and send entries.
-       if (req.getTerm() < currentTerm_.get()) {
+        long leaderTerm = req.getTerm();
+        if (leaderTerm < currentTerm_.get()) {
            respBuilder.setSuccess(false);
        }
        else {
-           switch (state_.get()) {
-               case Follower:
-                   signalTimeoutCond();
-                   Log log =  logStore_.getLog(req.getPreLogIndex());
-                   if(log == null || log.getTerm() != req.getPreLogTerm())
-                        respBuilder.setSuccess(false);
-                   else{
-                       List<Log> logs = req.getEntriesList();
-                       logStore_.storeLog(logs);
-
-                       if(req.getLeaderCommit() > commitIndex_) {
-                           commitIndex_ = Math.max(req.getLeaderCommit(), logStore_.getLastIndex());
-                       }
-                       respBuilder.setSuccess(true);
-                   }
-
-                   break;
-               case Candidate:
-                   signalTimeoutCond();
-                   state_.set(State.Follower);
-                   currentTerm_.set(req.getTerm());
-                   respBuilder.setSuccess(true);
-                   break;
-               case Leader:
-                   signalTimeoutCond();
-                   state_.set(State.Follower);
-                   currentTerm_.set(req.getTerm());
-                   respBuilder.setSuccess(true);
-                   break;
-               default:
-                   break;
-           }
-
+           signalTimeoutCond();
+            if(leaderTerm > currentTerm_.get()) {
+                currentTerm_.set(leaderTerm);
+                if(!isFollower()) {
+                    state_.set(State.Follower);
+                }
+            }
+            
+            if(req.getEntriesCount() == 0) {
+                // Handle heartbeat
+                respBuilder.setSuccess(true);
+            }
+            else {
+                // Handle append entries
+                Log log = logStore_.getLog(req.getPreLogIndex());
+                if (log == null || log.getTerm() != req.getPreLogTerm())
+                    respBuilder.setSuccess(false);
+                else {
+                    List<Log> logs = req.getEntriesList();
+                    logStore_.storeLog(logs);
+                    
+                    respBuilder.setSuccess(true);
+                }
+            }
+            
+            if (req.getLeaderCommit() > commitIndex_) {
+                commitIndex_ = Math.min(req.getLeaderCommit(), logStore_.getLastIndex());
+                applyFSM(commitIndex_);
+                
+            }
        }
-
 
         responseObserver.onNext(respBuilder.build());
         responseObserver.onCompleted();
     }
     
+    public void clientOperate(grpc.Raft.ClientReq request,
+                              io.grpc.stub.StreamObserver<grpc.Raft.ClientResp> responseObserver) {
+        ClientResp resp;
+        if(!isLeader()) {
+            ClientResp.Builder respBuilder = ClientResp.newBuilder();
+            respBuilder.setSuccess(false);
+            respBuilder.setError("not leader");
+            resp = respBuilder.build();
+        } else {
+            resp = processClientRpc(request);
+        }
+        
+        responseObserver.onNext(resp);
+        responseObserver.onCompleted();
+    }
+    
+    class DispatchEntriesJob implements Callable {
+    
+        private Endpoint endpoint_;
+        
+        public DispatchEntriesJob(Endpoint endpoint) {
+            endpoint_ = endpoint;
+        }
+        @Override
+        public Object call() throws Exception {
+            AppendEntriesReq.Builder builder = AppendEntriesReq.newBuilder();
+            
+            while(true) {
+                int followerId = endpoint_.getId();
+                long preLogIndex = -1;
+                long prelogTerm = -1;
+                if (nextIndex_[followerId] > 0) {
+                    Log preLog = logStore_.getLog(nextIndex_[followerId] - 1);
+                    prelogTerm = preLog.getTerm();
+                    preLogIndex = preLog.getIndex();
+                }
+    
+                List<Log> logs = logStore_.getLogs(nextIndex_[followerId], commitIndex_);
+    
+                builder.addAllEntries(logs)
+                        .setLeaderId(getId())
+                        .setLeaderCommit(commitIndex_)
+                        .setPreLogIndex(preLogIndex)
+                        .setPreLogTerm(prelogTerm)
+                        .setTerm(currentTerm_.get());
+    
+                Channel channel = NettyChannelBuilder.forAddress(endpoint_.getHost(), endpoint_.getPort()).
+                        negotiationType(NegotiationType.PLAINTEXT).build();
+                RaftCommServiceGrpc.RaftCommServiceBlockingStub stub = RaftCommServiceGrpc.newBlockingStub(channel);
+                AppendEntriesResp resp = stub.appendEntries(builder.build());
+                if(resp.getSuccess()) {
+                    nextIndex_[followerId] = commitIndex_ + 1;
+                    matchIndex_[followerId] = commitIndex_;
+                    break;
+                }
+                else {
+                    if(--nextIndex_[followerId] < 0)
+                        throw new Exception("why nexIndex < 0? ");
+                }
+            }
+            return new Object();
+        }
+    }
+    
+    private ClientResp processClientRpc(ClientReq request) {
+        assert isLeader();
+        ByteString reqByteString = request.toByteString();
+        Log.Builder builder = Log.newBuilder()
+                .setData(reqByteString)
+                .setIndex(commitIndex_+1)
+                .setTerm(currentTerm_.get());
+        Log log = builder.build();
+        
+        ImmutableList<Log> logs = ImmutableList.of(log);
+        logStore_.storeLog(logs);
+    
+    
+        ListeningExecutorService service = MoreExecutors.listeningDecorator(Executors.newCachedThreadPool());
+        final CountDownLatch countDownLatch = new CountDownLatch(getQuorumNum());
+        
+        for(Endpoint endpoint : getOthers()) {
+            ListenableFuture<Object> future = service.submit(new DispatchEntriesJob(endpoint));
+            Futures.addCallback(future, new FutureCallback<Object>() {
+                @Override
+                public void onSuccess(@Nullable Object result) {
+                    countDownLatch.countDown();
+                }
+    
+                @Override
+                public void onFailure(Throwable t) {
+                    t.printStackTrace();
+                }
+            });
+        }
+        try {
+            boolean timeout = !countDownLatch.await(10, TimeUnit.SECONDS);
+            if(timeout)
+                return ClientResp.newBuilder().setSuccess(false).setError("timeout").build();
+            
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        
+        // Notify followers to commit log
+        List<ListenableFuture<AppendEntriesResp>> futures = sendHeartbeat();
+        final CountDownLatch  appendEntriesLatch = new CountDownLatch(getQuorumNum());
+        for(ListenableFuture<AppendEntriesResp> future : futures) {
+            Futures.addCallback(future, new FutureCallback<AppendEntriesResp>() {
+                @Override
+                public void onSuccess(@Nullable AppendEntriesResp result) {
+                    if(result == null) return;
+                    if(result.getSuccess()) {
+                        appendEntriesLatch.countDown();
+                    }
+                }
+    
+                @Override
+                public void onFailure(Throwable t) {
+                    debug(t.getMessage());
+                }
+            });
+        }
+    
+        try {
+            boolean timeout = ! appendEntriesLatch.await(10, TimeUnit.SECONDS);
+            if(timeout)
+                return ClientResp.newBuilder().setSuccess(false).setError("timeout").build();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    
+        applyFSM(++commitIndex_);
+
+        return ClientResp.newBuilder().setSuccess(true).build();
+    }
+    
+    private void applyFSM(long index) {
+        while(++lastApplied_ <= index) {
+            fsm_.apply(logStore_.getLog(lastApplied_));
+        }
+    }
+    
+    private List<Endpoint> getOthers() {
+        synchronized (cluster_) {
+            List<Endpoint> others = new ArrayList<>();
+            others.addAll(cluster_);
+            others.remove(getEndpoint());
+            return others;
+        }
+    }
+    
     private void startCommServer() throws IOException {
     
-        gRpcServer_ = NettyServerBuilder.forPort(port_)
+        gRpcServer_ = NettyServerBuilder.forPort(getPort())
                 .addService(this)
                 .build();
         gRpcServer_.start();
@@ -374,13 +539,21 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     }
     
     public static void main(String[] args) throws IOException, InterruptedException {
+        
+        Configurator.setRootLevel(Level.DEBUG);
+        
         String host =  "localhost";
         int port = 8300;
         
         ArrayList<Node> nodes = new ArrayList<>();
+        ArrayList<Endpoint> endpoints = new ArrayList<>();
         
         for(int i=0; i<5; ++i) {
-             nodes.add(new Node(i, host, port+i, nodes));
+            endpoints.add(new Endpoint(i, host, port+i));
+        }
+        
+        for(int i=0; i<5; ++i) {
+            nodes.add(new Node(endpoints.get(i), endpoints));
         }
         
         Thread.sleep(30 * 1000);
@@ -393,15 +566,6 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                 break;
             }
         }
-        
-        
-        
-        Thread.sleep(30 * 1000);
-        
-        nodes.remove(testNode);
-        
-        nodes.add(new Node(5, host, port+5, nodes));
-        
         
         Thread.sleep(30 * 1000);
         
