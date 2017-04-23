@@ -38,6 +38,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     
     private final List<Endpoint> cluster_;
     private Integer voteFor_;
+    private Long lastVoteTerm_;
     private AtomicLong currentTerm_;
 
     private AtomicReference<State> state_;
@@ -47,6 +48,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     private long commitIndex_;
     private long lastApplied_;
     private LogStore logStore_;
+    private StateTable stateTable_;
 
     private long[] nextIndex_;
     private long[] matchIndex_;
@@ -62,15 +64,18 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     public Node(Endpoint endpoint, List<Endpoint> cluster) throws IOException, InterruptedException {
         endpoint_ = endpoint;
         cluster_ = cluster;
-
+    
+        stateTable_ = new StateTable(getId());
         state_ = new AtomicReference<>(State.Follower);
-        voteFor_ = null;
-        currentTerm_ = new AtomicLong(0);
+        voteFor_ = stateTable_.getVoteFor();
+        lastVoteTerm_ = stateTable_.getLastVoteTerm();
+        currentTerm_ = new AtomicLong(stateTable_.getCurrentTerm());
+        lastApplied_ = stateTable_.getLastApplied();
         grantedVotes_ = 0;
 
         logStore_ = new LeveldbLogStore(Config.persistenceFilePathPrefix + getId());
         commitIndex_ = logStore_.getLastIndex();
-        lastApplied_ = 0;
+
         fsm_ = new FSM();
     
         timeoutLock_ = new ReentrantLock();
@@ -102,11 +107,31 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         return state_.get();
     }
     
+    private void setCurrentTerm(long term) {
+        stateTable_.storeCurrentTerm(term);
+        currentTerm_.set(term);
+    }
+    
+    private void incrCurrentTerm() {
+        setCurrentTerm(currentTerm_.get() + 1);
+    }
+    
+    private long incrAndGetLastApplied() {
+        stateTable_.storeLastApplied(lastApplied_ + 1);
+        return ++lastApplied_;
+    }
+    
+    private void updateVoteFor(int voteForCandId) {
+        stateTable_.storeVoteFor(voteForCandId);
+        stateTable_.storeLastVoteTerm(currentTerm_.get());
+        voteFor_ = voteForCandId;
+    }
+    
     public void startLoopThread() {
     
         Thread loopThread = new Thread(() -> {
             while (isRunning_) {
-                switch (state_.get()) {
+                switch (getState()) {
                     case Follower:
                         runFollower();
                         break;
@@ -129,11 +154,11 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     }
     
     private boolean isLeader() {
-        return state_.get().equals(State.Leader);
+        return getState().equals(State.Leader);
     }
     
     private boolean isFollower() {
-        return state_.get().equals(State.Follower);
+        return getState().equals(State.Follower);
     }
     
     private int getFollowerTimeoutMillSec() {
@@ -184,7 +209,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     }
     
     private void startCandidateSate() {
-        currentTerm_.incrementAndGet();
+        incrCurrentTerm();
         grantedVotes_ = 1;
     }
     
@@ -281,18 +306,16 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
 ////                ", current term: " + currentTerm_.get() + ", req term: " + req.getTerm() + ", voteFor: " + voteFor_);
 
         if(req.getTerm() > currentTerm_.get()) {
-            currentTerm_.set(req.getTerm());
-            if(!state_.equals(State.Follower)) {
+            setCurrentTerm(req.getTerm());
+            if (!isFollower()) {
                 state_.set(State.Follower);
                 signalTimeoutCond();
             }
             respBuilder.setVoteGranted(true);
-            voteFor_ = req.getCandidateId();
-        }else if(req.getTerm() == currentTerm_.get() &&
-                (voteFor_ == null || voteFor_ == req.getCandidateId())) {
-
+            updateVoteFor(req.getCandidateId());
+        } else if ((voteFor_ == null || lastVoteTerm_ == null) || lastVoteTerm_.equals(req.getTerm()) && voteFor_.equals(req.getCandidateId())) {
             respBuilder.setVoteGranted(true);
-            voteFor_ = req.getCandidateId();
+            updateVoteFor(req.getCandidateId());
         }else {
             respBuilder.setVoteGranted(false);
         }
@@ -329,7 +352,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
        else {
            signalTimeoutCond();
             if(leaderTerm > currentTerm_.get()) {
-                currentTerm_.set(leaderTerm);
+                setCurrentTerm(leaderTerm);
                 if(!isFollower()) {
                     state_.set(State.Follower);
                 }
@@ -379,7 +402,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         responseObserver.onCompleted();
     }
     
-    class DispatchEntriesJob implements Callable {
+    class DispatchEntriesJob implements Callable<Object> {
     
         private Endpoint endpoint_;
         
@@ -500,7 +523,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     }
     
     private void applyFSM(long index) {
-        while(++lastApplied_ <= index) {
+        while (incrAndGetLastApplied() <= index) {
             fsm_.apply(logStore_.getLog(lastApplied_));
         }
     }
@@ -521,14 +544,11 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                 .build();
         gRpcServer_.start();
     
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                // Use stderr here since the logger may have been reset by its JVM shutdown hook.
-                System.err.println("*** shutting down gRPC server since JVM is shutting down");
-                System.err.println("*** server shut down");
-            }
-        });
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            // Use stderr here since the logger may have been reset by its JVM shutdown hook.
+            System.err.println("*** shutting down gRPC server since JVM is shutting down");
+            System.err.println("*** server shut down");
+        }));
     }
     
     public void shutdown() {
