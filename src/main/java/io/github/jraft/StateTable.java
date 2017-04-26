@@ -21,14 +21,16 @@ public class StateTable implements Closeable {
     private DB db_;
     private int id_;
     private String filePath_;
+    private Config conf_;
     
     private static String TERM_KEY = "term";
     private static String LAST_APPLIED_KEY = "last_applied";
     private static String VOTE_FOR_KEY = "vote_for";
     private static String LAST_VOTE_TERM_KEY = "last_vote_term";
     
-    public StateTable(int id) throws IOException {
+    public StateTable(int id, Config conf) throws IOException {
         id_ = id;
+        conf_ = conf;
         filePath_ = getFilePath();
         Options options = new Options();
         options.createIfMissing(true);
@@ -37,7 +39,7 @@ public class StateTable implements Closeable {
     }
     
     public String getFilePath() {
-        return Config.persistenceFilePathPrefix + LOG_PREFIX + id_;
+        return conf_.getPersistenceFilePathPrefix() + LOG_PREFIX + id_;
     }
     
     @Nullable

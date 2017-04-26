@@ -2,6 +2,7 @@ package io.github.jraft;
 
 import com.google.protobuf.ByteString;
 import grpc.Raft.Log;
+import org.apache.commons.io.FileUtils;
 import org.junit.*;
 
 import java.io.File;
@@ -20,20 +21,19 @@ public class LeveldbLogStoreTest {
         logStore_ = new LeveldbLogStore(LOG_FILE_PATH);
     }
     
-    private static void deleteFile(String filePath) {
-        File file = new File(filePath);
-        if (file.isFile()) {
-            file.delete();
-        }
+    private static void deleteFile(String filePath) throws IOException {
+        File dir = new File(filePath);
+        FileUtils.deleteDirectory(dir);
     }
     
     @After
     public void afterTest() throws IOException {
+        deleteFile(LOG_FILE_PATH);
         logStore_.close();
     }
     
     @AfterClass
-    public static void after() {
+    public static void after() throws IOException {
         deleteFile(LOG_FILE_PATH);
     }
     
@@ -70,5 +70,17 @@ public class LeveldbLogStoreTest {
     public void testKeyNotExist() {
         Log log = logStore_.getLog(10);
         Assert.assertNull(log);
+    }
+
+    @Test
+    public void testGetLastIndexInEmptyDbFile() {
+        long index = logStore_.getLastIndex();
+        Assert.assertEquals(-1, index);
+    }
+
+    @Test
+    public void testGetFirstIndexInEmptyDbFile() {
+        long index = logStore_.getFirstIndex();
+        Assert.assertEquals(-1, index);
     }
 }

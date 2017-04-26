@@ -2,8 +2,14 @@ package io.github.jraft;
 
 import grpc.Raft.Log;
 
-public class FSM {
-    boolean apply(Log log) {
+interface IFSM {
+    boolean apply(Log log);
+}
+
+public class FSM implements IFSM {
+
+    @Override
+    public boolean apply(Log log) {
         return true;
     }
 }

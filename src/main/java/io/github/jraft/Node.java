@@ -11,6 +11,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.*;
 import com.google.protobuf.ByteString;
+import com.sun.corba.se.spi.activation.EndPointInfo;
 import grpc.Raft.*;
 import grpc.RaftCommServiceGrpc;
 import grpc.RaftCommServiceGrpc.RaftCommServiceFutureStub;
@@ -49,34 +50,38 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     private long lastApplied_;
     private LogStore logStore_;
     private StateTable stateTable_;
+    private Integer leaderId_;
 
     private long[] nextIndex_;
     private long[] matchIndex_;
     
 
+    private Server gCommServer_;
     private Server gRpcServer_;
     private Lock timeoutLock_;
     private Condition timeoutCond_;
     private boolean isRunning_;
-    private FSM fsm_;
+    private IFSM fsm_;
+    private Config conf_;
     
 
-    public Node(Endpoint endpoint, List<Endpoint> cluster) throws IOException, InterruptedException {
+    public Node(Endpoint endpoint, Config conf, IFSM fsm, List<Endpoint> cluster) throws IOException, InterruptedException {
         endpoint_ = endpoint;
+        conf_ = conf;
         cluster_ = cluster;
+        fsm_ = fsm;
     
-        stateTable_ = new StateTable(getId());
+        stateTable_ = new StateTable(getId(), conf_);
         state_ = new AtomicReference<>(State.Follower);
         voteFor_ = stateTable_.getVoteFor();
         lastVoteTerm_ = stateTable_.getLastVoteTerm();
         currentTerm_ = new AtomicLong(stateTable_.getCurrentTerm());
         lastApplied_ = stateTable_.getLastApplied();
         grantedVotes_ = 0;
+        leaderId_ = null;
 
-        logStore_ = new LeveldbLogStore(Config.persistenceFilePathPrefix + getId());
+        logStore_ = new LeveldbLogStore(conf.getPersistenceFilePathPrefix() + getId());
         commitIndex_ = logStore_.getLastIndex();
-
-        fsm_ = new FSM();
     
         timeoutLock_ = new ReentrantLock();
         timeoutCond_ = timeoutLock_.newCondition();
@@ -84,6 +89,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     
         startLoopThread();
         startCommServer();
+        startRpcServer();
         
     }
     
@@ -105,6 +111,15 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     
     public State getState() {
         return state_.get();
+    }
+
+    public Config getConf() {
+        return conf_;
+    }
+
+    @Nullable
+    public Integer getLeaderId() {
+        return leaderId_;
     }
     
     private void setCurrentTerm(long term) {
@@ -153,21 +168,21 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         logger_.debug("node " + getId() + ": " + str);
     }
     
-    private boolean isLeader() {
+    public boolean isLeader() {
         return getState().equals(State.Leader);
     }
     
-    private boolean isFollower() {
+    public boolean isFollower() {
         return getState().equals(State.Follower);
     }
     
     private int getFollowerTimeoutMillSec() {
         return (new Random().nextInt(150)
-                + Config.FollowerTimeoutSec * 1000 + 1);
+                + conf_.getFollowerTimeoutSec() * 1000 + 1);
     }
     
     private int getCandidateTimeoutMilliSec() {
-        return Config.CandidateTimeoutSec * 1000;
+        return conf_.getCandidateTimeoutSec() * 1000;
     }
     
     private int getQuorumNum() {
@@ -223,6 +238,11 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                 .build();
         
         List<ListenableFuture<RequestVoteResp>> futures = new ArrayList<>();
+        if(grantedVotes_ >= getQuorumNum()) {
+            becomeLeader();
+            return;
+        }
+
         for(Endpoint ep : getOthers()) {
             Channel channel = NettyChannelBuilder.forAddress(ep.getHost(), ep.getPort())
                     .negotiationType(NegotiationType.PLAINTEXT)
@@ -270,13 +290,14 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     }
 
     private void becomeLeader() {
+        leaderId_ = endpoint_.getId();
         state_.set(State.Leader);
         reinitLeaderStates();
     }
     
     private void runLeader() {
         sendHeartbeat();
-        awaitFor(Config.leaderHbIntervalSec * 1000);
+        awaitFor(conf_.getLeaderHbIntervalSec() * 1000);
     }
     
     private List<ListenableFuture<AppendEntriesResp>> sendHeartbeat() {
@@ -351,6 +372,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
        }
        else {
            signalTimeoutCond();
+           leaderId_ = req.getLeaderId();
             if(leaderTerm > currentTerm_.get()) {
                 setCurrentTerm(leaderTerm);
                 if(!isFollower()) {
@@ -385,9 +407,11 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         responseObserver.onNext(respBuilder.build());
         responseObserver.onCompleted();
     }
-    
+
+    @Override
     public void clientOperate(grpc.Raft.ClientReq request,
                               io.grpc.stub.StreamObserver<grpc.Raft.ClientResp> responseObserver) {
+        logger_.info("receive client op request");
         ClientResp resp;
         if(!isLeader()) {
             ClientResp.Builder respBuilder = ClientResp.newBuilder();
@@ -465,7 +489,11 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     
         ListeningExecutorService service = MoreExecutors.listeningDecorator(Executors.newCachedThreadPool());
         final CountDownLatch countDownLatch = new CountDownLatch(getQuorumNum());
-        
+
+        List<Endpoint> endpoints = getOthers();
+        if(endpoints.isEmpty())
+            return ClientResp.newBuilder().setSuccess(true).build();
+
         for(Endpoint endpoint : getOthers()) {
             ListenableFuture<Object> future = service.submit(new DispatchEntriesJob(endpoint));
             Futures.addCallback(future, new FutureCallback<Object>() {
@@ -536,13 +564,17 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
             return others;
         }
     }
+
+    IFSM getFsm() {
+        return fsm_;
+    }
     
     private void startCommServer() throws IOException {
     
-        gRpcServer_ = NettyServerBuilder.forPort(getPort())
+        gCommServer_ = NettyServerBuilder.forPort(getPort())
                 .addService(this)
                 .build();
-        gRpcServer_.start();
+        gCommServer_.start();
     
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             // Use stderr here since the logger may have been reset by its JVM shutdown hook.
@@ -550,21 +582,32 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
             System.err.println("*** server shut down");
         }));
     }
+
+    private void startRpcServer() throws IOException {
+        gRpcServer_ = NettyServerBuilder.forPort(conf_.getLocalServerPort())
+                .addService(this)
+                .build();
+        gRpcServer_.start();
+    }
+
+
     
     public void shutdown() {
         debug("is shut down");
+        leaderId_ = null;
         state_.set(State.Shutdown);
         isRunning_ = false;
         gRpcServer_.shutdown();
+        gCommServer_.shutdown();
     }
     
     public static void main(String[] args) throws IOException, InterruptedException {
         
         Configurator.setRootLevel(Level.DEBUG);
-        
+        Config conf = new Config();
         String host =  "localhost";
         int port = 8300;
-        
+        IFSM fsm = new FSM();
         ArrayList<Node> nodes = new ArrayList<>();
         ArrayList<Endpoint> endpoints = new ArrayList<>();
         
@@ -573,7 +616,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         }
         
         for(int i=0; i<5; ++i) {
-            nodes.add(new Node(endpoints.get(i), endpoints));
+            nodes.add(new Node(endpoints.get(i), conf, fsm, endpoints));
         }
         
         Thread.sleep(30 * 1000);
@@ -588,7 +631,5 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         }
         
         Thread.sleep(30 * 1000);
-        
-        
     }
 }

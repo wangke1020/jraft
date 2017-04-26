@@ -8,6 +8,7 @@ import grpc.Raft;
 import org.iq80.leveldb.*;
 import static org.fusesource.leveldbjni.JniDBFactory.*;
 import java.io.*;
+import java.util.NoSuchElementException;
 
 public class LeveldbLogStore implements LogStore, Closeable {
     private String LOG_PREFIX = "log.";
@@ -57,6 +58,8 @@ public class LeveldbLogStore implements LogStore, Closeable {
             iterator.seekToFirst();
             String key = asString(iterator.peekNext().getKey());
             return getIndexFromKey(key);
+        }catch (NoSuchElementException e) {
+            return -1;
         } finally {
             // Make sure you close the iterator to avoid resource leaks.
             try {
@@ -74,7 +77,10 @@ public class LeveldbLogStore implements LogStore, Closeable {
             iterator.seekToLast();
             String key = asString(iterator.peekNext().getKey());
             return getIndexFromKey(key);
-        } finally {
+
+        }catch (NoSuchElementException e) {
+            return -1;
+        }finally {
             // Make sure you close the iterator to avoid resource leaks.
             try {
                 iterator.close();
