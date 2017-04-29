@@ -42,6 +42,8 @@ message Log {
 
 enum Op {
     Put = 0;
+    Get = 1;
+    Del = 2;
 }
 
 message ClientReq {
@@ -51,6 +53,6 @@ message ClientReq {
 
 message ClientResp {
     bool success = 1;
-    string result = 2;
+    repeated string result = 2;
     string error = 3;
 }

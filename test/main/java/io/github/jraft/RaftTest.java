@@ -61,9 +61,9 @@ public class RaftTest {
         }
 
         @Override
-        public boolean apply(Log log) {
+        public AppliedRes apply(Log log) {
             logs_.add(log);
-            return true;
+            return AppliedRes.newSuccessRes();
         }
 
         public int getLogNum() {
@@ -144,5 +144,7 @@ public class RaftTest {
         Raft.ClientResp resp = testClient.putMsg("test msg");
 
         Assert.assertTrue(resp.getSuccess());
+    
+        Assert.assertEquals("1 msg in fsm should be applied", 1, fsm.getLogNum());
     }
 }

@@ -11,7 +11,6 @@ import java.util.concurrent.locks.ReentrantLock;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.*;
 import com.google.protobuf.ByteString;
-import com.sun.corba.se.spi.activation.EndPointInfo;
 import grpc.Raft.*;
 import grpc.RaftCommServiceGrpc;
 import grpc.RaftCommServiceGrpc.RaftCommServiceFutureStub;
@@ -76,6 +75,8 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         voteFor_ = stateTable_.getVoteFor();
         lastVoteTerm_ = stateTable_.getLastVoteTerm();
         currentTerm_ = new AtomicLong(stateTable_.getCurrentTerm());
+    
+        // If no 'lastApplied' in state table, lastApplied_ will be set to -1
         lastApplied_ = stateTable_.getLastApplied();
         grantedVotes_ = 0;
         leaderId_ = null;
@@ -482,67 +483,70 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                 .setIndex(commitIndex_+1)
                 .setTerm(currentTerm_.get());
         Log log = builder.build();
+    
+    
+        if (request.getOp() == Op.Get) {
+            AppliedRes res = applyFsm(log);
+            return ClientResp.newBuilder().setSuccess(res.isSuccess()).addResult(res.getResult()).setError(res.getError().toString()).build();
+        
+        }
         
         ImmutableList<Log> logs = ImmutableList.of(log);
         logStore_.storeLog(logs);
-    
-    
-        ListeningExecutorService service = MoreExecutors.listeningDecorator(Executors.newCachedThreadPool());
-        final CountDownLatch countDownLatch = new CountDownLatch(getQuorumNum());
 
         List<Endpoint> endpoints = getOthers();
-        if(endpoints.isEmpty())
-            return ClientResp.newBuilder().setSuccess(true).build();
-
-        for(Endpoint endpoint : getOthers()) {
-            ListenableFuture<Object> future = service.submit(new DispatchEntriesJob(endpoint));
-            Futures.addCallback(future, new FutureCallback<Object>() {
-                @Override
-                public void onSuccess(@Nullable Object result) {
-                    countDownLatch.countDown();
-                }
-    
-                @Override
-                public void onFailure(Throwable t) {
-                    t.printStackTrace();
-                }
-            });
-        }
-        try {
-            boolean timeout = !countDownLatch.await(10, TimeUnit.SECONDS);
-            if(timeout)
-                return ClientResp.newBuilder().setSuccess(false).setError("timeout").build();
-            
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        if (!endpoints.isEmpty()) {
+            ListeningExecutorService service = MoreExecutors.listeningDecorator(Executors.newCachedThreadPool());
+            final CountDownLatch countDownLatch = new CountDownLatch(getQuorumNum());
         
-        // Notify followers to commit log
-        List<ListenableFuture<AppendEntriesResp>> futures = sendHeartbeat();
-        final CountDownLatch  appendEntriesLatch = new CountDownLatch(getQuorumNum());
-        for(ListenableFuture<AppendEntriesResp> future : futures) {
-            Futures.addCallback(future, new FutureCallback<AppendEntriesResp>() {
-                @Override
-                public void onSuccess(@Nullable AppendEntriesResp result) {
-                    if(result == null) return;
-                    if(result.getSuccess()) {
-                        appendEntriesLatch.countDown();
+            for (Endpoint endpoint : getOthers()) {
+                ListenableFuture<Object> future = service.submit(new DispatchEntriesJob(endpoint));
+                Futures.addCallback(future, new FutureCallback<Object>() {
+                    @Override
+                    public void onSuccess(@Nullable Object result) {
+                        countDownLatch.countDown();
                     }
-                }
-    
-                @Override
-                public void onFailure(Throwable t) {
-                    debug(t.getMessage());
-                }
-            });
-        }
-    
-        try {
-            boolean timeout = ! appendEntriesLatch.await(10, TimeUnit.SECONDS);
-            if(timeout)
-                return ClientResp.newBuilder().setSuccess(false).setError("timeout").build();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+                
+                    @Override
+                    public void onFailure(Throwable t) {
+                        t.printStackTrace();
+                    }
+                });
+            }
+            try {
+                boolean timeout = !countDownLatch.await(10, TimeUnit.SECONDS);
+                if (timeout) return ClientResp.newBuilder().setSuccess(false).setError("timeout").build();
+            
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        
+            // Notify followers to commit log
+            List<ListenableFuture<AppendEntriesResp>> futures = sendHeartbeat();
+            final CountDownLatch appendEntriesLatch = new CountDownLatch(getQuorumNum());
+            for (ListenableFuture<AppendEntriesResp> future : futures) {
+                Futures.addCallback(future, new FutureCallback<AppendEntriesResp>() {
+                    @Override
+                    public void onSuccess(@Nullable AppendEntriesResp result) {
+                        if (result == null) return;
+                        if (result.getSuccess()) {
+                            appendEntriesLatch.countDown();
+                        }
+                    }
+                
+                    @Override
+                    public void onFailure(Throwable t) {
+                        debug(t.getMessage());
+                    }
+                });
+            }
+        
+            try {
+                boolean timeout = !appendEntriesLatch.await(10, TimeUnit.SECONDS);
+                if (timeout) return ClientResp.newBuilder().setSuccess(false).setError("timeout").build();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
     
         applyFSM(++commitIndex_);
@@ -552,8 +556,12 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     
     private void applyFSM(long index) {
         while (incrAndGetLastApplied() <= index) {
-            fsm_.apply(logStore_.getLog(lastApplied_));
+            applyFsm(logStore_.getLog(lastApplied_));
         }
+    }
+    
+    private AppliedRes applyFsm(Log log) {
+        return fsm_.apply(log);
     }
     
     private List<Endpoint> getOthers() {
@@ -607,7 +615,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         Config conf = new Config();
         String host =  "localhost";
         int port = 8300;
-        IFSM fsm = new FSM();
+        IFSM fsm = new KvFsm(conf.getPersistenceFilePathPrefix() + ".kv");
         ArrayList<Node> nodes = new ArrayList<>();
         ArrayList<Endpoint> endpoints = new ArrayList<>();
         

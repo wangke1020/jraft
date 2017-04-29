@@ -88,7 +88,7 @@ public class StateTable implements Closeable {
     
     public long getLastApplied() {
         Long index = getLongValue(LAST_APPLIED_KEY);
-        if (index == null) return 0;
+        if (index == null) return -1;
         return index;
     }
     

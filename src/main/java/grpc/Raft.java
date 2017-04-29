@@ -22,7 +22,13 @@ public final class Raft {
     /**
      * <code>Put = 0;</code>
      */
-    Put(0),
+    Put(0), /**
+     * <code>Get = 1;</code>
+     */
+    Get(1), /**
+     * <code>Del = 2;</code>
+     */
+    Del(2),
     UNRECOGNIZED(-1),
     ;
 
@@ -30,6 +36,14 @@ public final class Raft {
      * <code>Put = 0;</code>
      */
     public static final int Put_VALUE = 0;
+    /**
+     * <code>Get = 1;</code>
+     */
+    public static final int Get_VALUE = 1;
+    /**
+     * <code>Del = 2;</code>
+     */
+    public static final int Del_VALUE = 2;
 
 
     public final int getNumber() {
@@ -50,7 +64,11 @@ public final class Raft {
 
     public static Op forNumber(int value) {
       switch (value) {
-        case 0: return Put;
+        case 0:
+          return Put;
+        case 1:
+          return Get;
+        case 2: return Del;
         default: return null;
       }
     }
@@ -4126,16 +4144,27 @@ public final class Raft {
      * <code>bool success = 1;</code>
      */
     boolean getSuccess();
-
+  
     /**
-     * <code>string result = 2;</code>
+     * <code>repeated string result = 2;</code>
      */
-    java.lang.String getResult();
+    java.util.List<java.lang.String> getResultList();
+  
     /**
-     * <code>string result = 2;</code>
+     * <code>repeated string result = 2;</code>
+     */
+    int getResultCount();
+  
+    /**
+     * <code>repeated string result = 2;</code>
+     */
+    java.lang.String getResult(int index);
+  
+    /**
+     * <code>repeated string result = 2;</code>
      */
     com.google.protobuf.ByteString
-        getResultBytes();
+        getResultBytes(int index);
 
     /**
      * <code>string error = 3;</code>
@@ -4158,9 +4187,10 @@ public final class Raft {
     private ClientResp(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
+  
     private ClientResp() {
       success_ = false;
-      result_ = "";
+      result_ = com.google.protobuf.LazyStringArrayList.EMPTY;
       error_ = "";
     }
 
@@ -4196,8 +4226,11 @@ public final class Raft {
             }
             case 18: {
               java.lang.String s = input.readStringRequireUtf8();
-
-              result_ = s;
+              if (!((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
+                result_ = new com.google.protobuf.LazyStringArrayList();
+                mutable_bitField0_ |= 0x00000002;
+              }
+              result_.add(s);
               break;
             }
             case 26: {
@@ -4214,6 +4247,9 @@ public final class Raft {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        if (((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
+          result_ = result_.getUnmodifiableView();
+        }
         makeExtensionsImmutable();
       }
     }
@@ -4229,6 +4265,7 @@ public final class Raft {
               grpc.Raft.ClientResp.class, grpc.Raft.ClientResp.Builder.class);
     }
 
+    private int bitField0_;
     public static final int SUCCESS_FIELD_NUMBER = 1;
     private boolean success_;
     /**
@@ -4239,37 +4276,33 @@ public final class Raft {
     }
 
     public static final int RESULT_FIELD_NUMBER = 2;
-    private volatile java.lang.Object result_;
+    private com.google.protobuf.LazyStringList result_;
+  
     /**
-     * <code>string result = 2;</code>
+     * <code>repeated string result = 2;</code>
      */
-    public java.lang.String getResult() {
-      java.lang.Object ref = result_;
-      if (ref instanceof java.lang.String) {
-        return (java.lang.String) ref;
-      } else {
-        com.google.protobuf.ByteString bs = 
-            (com.google.protobuf.ByteString) ref;
-        java.lang.String s = bs.toStringUtf8();
-        result_ = s;
-        return s;
-      }
+    public com.google.protobuf.ProtocolStringList getResultList() {
+      return result_;
+    }
+  
+    /**
+     * <code>repeated string result = 2;</code>
+     */
+    public int getResultCount() {
+      return result_.size();
+    }
+  
+    /**
+     * <code>repeated string result = 2;</code>
+     */
+    public java.lang.String getResult(int index) {
+      return result_.get(index);
     }
     /**
-     * <code>string result = 2;</code>
+     * <code>repeated string result = 2;</code>
      */
-    public com.google.protobuf.ByteString
-        getResultBytes() {
-      java.lang.Object ref = result_;
-      if (ref instanceof java.lang.String) {
-        com.google.protobuf.ByteString b = 
-            com.google.protobuf.ByteString.copyFromUtf8(
-                (java.lang.String) ref);
-        result_ = b;
-        return b;
-      } else {
-        return (com.google.protobuf.ByteString) ref;
-      }
+    public com.google.protobuf.ByteString getResultBytes(int index) {
+      return result_.getByteString(index);
     }
 
     public static final int ERROR_FIELD_NUMBER = 3;
@@ -4321,8 +4354,8 @@ public final class Raft {
       if (success_ != false) {
         output.writeBool(1, success_);
       }
-      if (!getResultBytes().isEmpty()) {
-        com.google.protobuf.GeneratedMessageV3.writeString(output, 2, result_);
+      for (int i = 0; i < result_.size(); i++) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 2, result_.getRaw(i));
       }
       if (!getErrorBytes().isEmpty()) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 3, error_);
@@ -4335,11 +4368,15 @@ public final class Raft {
 
       size = 0;
       if (success_ != false) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeBoolSize(1, success_);
+        size += com.google.protobuf.CodedOutputStream.computeBoolSize(1, success_);
       }
-      if (!getResultBytes().isEmpty()) {
-        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, result_);
+      {
+        int dataSize = 0;
+        for (int i = 0; i < result_.size(); i++) {
+          dataSize += computeStringSizeNoTag(result_.getRaw(i));
+        }
+        size += dataSize;
+        size += 1 * getResultList().size();
       }
       if (!getErrorBytes().isEmpty()) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(3, error_);
@@ -4360,10 +4397,9 @@ public final class Raft {
       grpc.Raft.ClientResp other = (grpc.Raft.ClientResp) obj;
 
       boolean result = true;
-      result = result && (getSuccess()
-          == other.getSuccess());
-      result = result && getResult()
-          .equals(other.getResult());
+      result = result && (getSuccess() == other.getSuccess());
+      result = result && getResultList()
+          .equals(other.getResultList());
       result = result && getError()
           .equals(other.getError());
       return result;
@@ -4377,10 +4413,11 @@ public final class Raft {
       int hash = 41;
       hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + SUCCESS_FIELD_NUMBER;
-      hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
-          getSuccess());
-      hash = (37 * hash) + RESULT_FIELD_NUMBER;
-      hash = (53 * hash) + getResult().hashCode();
+      hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(getSuccess());
+      if (getResultCount() > 0) {
+        hash = (37 * hash) + RESULT_FIELD_NUMBER;
+        hash = (53 * hash) + getResultList().hashCode();
+      }
       hash = (37 * hash) + ERROR_FIELD_NUMBER;
       hash = (53 * hash) + getError().hashCode();
       hash = (29 * hash) + unknownFields.hashCode();
@@ -4502,9 +4539,9 @@ public final class Raft {
       public Builder clear() {
         super.clear();
         success_ = false;
-
-        result_ = "";
-
+  
+        result_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+        bitField0_ = (bitField0_ & ~0x00000002);
         error_ = "";
 
         return this;
@@ -4529,9 +4566,16 @@ public final class Raft {
 
       public grpc.Raft.ClientResp buildPartial() {
         grpc.Raft.ClientResp result = new grpc.Raft.ClientResp(this);
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
         result.success_ = success_;
+        if (((bitField0_ & 0x00000002) == 0x00000002)) {
+          result_ = result_.getUnmodifiableView();
+          bitField0_ = (bitField0_ & ~0x00000002);
+        }
         result.result_ = result_;
         result.error_ = error_;
+        result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
       }
@@ -4576,8 +4620,14 @@ public final class Raft {
         if (other.getSuccess() != false) {
           setSuccess(other.getSuccess());
         }
-        if (!other.getResult().isEmpty()) {
-          result_ = other.result_;
+        if (!other.result_.isEmpty()) {
+          if (result_.isEmpty()) {
+            result_ = other.result_;
+            bitField0_ = (bitField0_ & ~0x00000002);
+          } else {
+            ensureResultIsMutable();
+            result_.addAll(other.result_);
+          }
           onChanged();
         }
         if (!other.getError().isEmpty()) {
@@ -4609,6 +4659,7 @@ public final class Raft {
         }
         return this;
       }
+      private int bitField0_;
 
       private boolean success_ ;
       /**
@@ -4635,72 +4686,99 @@ public final class Raft {
         onChanged();
         return this;
       }
-
-      private java.lang.Object result_ = "";
-      /**
-       * <code>string result = 2;</code>
-       */
-      public java.lang.String getResult() {
-        java.lang.Object ref = result_;
-        if (!(ref instanceof java.lang.String)) {
-          com.google.protobuf.ByteString bs =
-              (com.google.protobuf.ByteString) ref;
-          java.lang.String s = bs.toStringUtf8();
-          result_ = s;
-          return s;
-        } else {
-          return (java.lang.String) ref;
-        }
-      }
-      /**
-       * <code>string result = 2;</code>
-       */
-      public com.google.protobuf.ByteString
-          getResultBytes() {
-        java.lang.Object ref = result_;
-        if (ref instanceof String) {
-          com.google.protobuf.ByteString b = 
-              com.google.protobuf.ByteString.copyFromUtf8(
-                  (java.lang.String) ref);
-          result_ = b;
-          return b;
-        } else {
-          return (com.google.protobuf.ByteString) ref;
-        }
-      }
-      /**
-       * <code>string result = 2;</code>
-       */
-      public Builder setResult(
-          java.lang.String value) {
-        if (value == null) {
-    throw new NullPointerException();
-  }
   
-        result_ = value;
+      private com.google.protobuf.LazyStringList result_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+  
+      private void ensureResultIsMutable() {
+        if (!((bitField0_ & 0x00000002) == 0x00000002)) {
+          result_ = new com.google.protobuf.LazyStringArrayList(result_);
+          bitField0_ |= 0x00000002;
+        }
+      }
+  
+      /**
+       * <code>repeated string result = 2;</code>
+       */
+      public com.google.protobuf.ProtocolStringList getResultList() {
+        return result_.getUnmodifiableView();
+      }
+  
+      /**
+       * <code>repeated string result = 2;</code>
+       */
+      public int getResultCount() {
+        return result_.size();
+      }
+  
+      /**
+       * <code>repeated string result = 2;</code>
+       */
+      public java.lang.String getResult(int index) {
+        return result_.get(index);
+      }
+      /**
+       * <code>repeated string result = 2;</code>
+       */
+      public com.google.protobuf.ByteString getResultBytes(int index) {
+        return result_.getByteString(index);
+      }
+  
+      /**
+       * <code>repeated string result = 2;</code>
+       */
+      public Builder setResult(int index, java.lang.String value) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureResultIsMutable();
+        result_.set(index, value);
         onChanged();
         return this;
       }
+  
       /**
-       * <code>string result = 2;</code>
+       * <code>repeated string result = 2;</code>
+       */
+      public Builder addResult(java.lang.String value) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureResultIsMutable();
+        result_.add(value);
+        onChanged();
+        return this;
+      }
+  
+      /**
+       * <code>repeated string result = 2;</code>
+       */
+      public Builder addAllResult(java.lang.Iterable<java.lang.String> values) {
+        ensureResultIsMutable();
+        com.google.protobuf.AbstractMessageLite.Builder.addAll(values, result_);
+        onChanged();
+        return this;
+      }
+  
+      /**
+       * <code>repeated string result = 2;</code>
        */
       public Builder clearResult() {
-        
-        result_ = getDefaultInstance().getResult();
+        result_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+        bitField0_ = (bitField0_ & ~0x00000002);
         onChanged();
         return this;
       }
       /**
-       * <code>string result = 2;</code>
+       * <code>repeated string result = 2;</code>
        */
-      public Builder setResultBytes(
+      public Builder addResultBytes(
           com.google.protobuf.ByteString value) {
         if (value == null) {
     throw new NullPointerException();
   }
   checkByteStringIsUtf8(value);
-        
-        result_ = value;
+        ensureResultIsMutable();
+        result_.add(value);
         onChanged();
         return this;
       }
@@ -4876,15 +4954,9 @@ public final class Raft {
       " \003(\0132\004.Log\022\025\n\rleader_commit\030\006 \001(\003\"2\n\021App" +
       "endEntriesResp\022\014\n\004term\030\001 \001(\003\022\017\n\007success\030" +
       "\002 \001(\010\">\n\003Log\022\r\n\005index\030\001 \001(\003\022\014\n\004term\030\002 \001(",
-      "\003\022\014\n\004data\030\003 \001(\014\022\014\n\004peer\030\004 \001(\t\"*\n\tClientR" +
-      "eq\022\017\n\002op\030\001 \001(\0162\003.Op\022\014\n\004args\030\002 \003(\t\"<\n\nCli" +
-      "entResp\022\017\n\007success\030\001 \001(\010\022\016\n\006result\030\002 \001(\t" +
-      "\022\r\n\005error\030\003 \001(\t*\r\n\002Op\022\007\n\003Put\020\0002\245\001\n\017RaftC" +
-      "ommService\0220\n\013RequestVote\022\017.RequestVoteR" +
-      "eq\032\020.RequestVoteResp\0226\n\rAppendEntries\022\021." +
-      "AppendEntriesReq\032\022.AppendEntriesResp\022(\n\r" +
-      "ClientOperate\022\n.ClientReq\032\013.ClientRespB\006" +
-      "\n\004grpcb\006proto3"
+      "\003\022\014\n\004data\030\003 \001(\014\022\014\n\004peer\030\004 \001(\t\"*\n\tClientR" + "eq\022\017\n\002op\030\001 \001(\0162\003.Op\022\014\n\004args\030\002 \003(\t\"<\n\nCli" + "entResp\022\017\n\007success\030\001 \001(\010\022\016\n\006result\030\002 \003(\t" + "\022\r\n\005error\030\003 \001(\t*\037\n\002Op\022\007\n\003Put\020\000\022\007\n\003Get\020\001\022" + "\007\n\003Del\020\0022\245\001\n\017RaftCommService\0220\n\013RequestV" + "ote\022\017.RequestVoteReq\032\020.RequestVoteResp\0226" + "\n\rAppendEntries\022\021.AppendEntriesReq\032\022.App" +
+      "endEntriesResp\022(\n\rClientOperate\022\n.Client" +
+      "Req\032\013.ClientRespB\006\n\004grpcb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
