@@ -62,15 +62,18 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     private boolean isRunning_;
     private IFSM fsm_;
     private Config conf_;
+    private int id_;
     
-
-    public Node(Endpoint endpoint, Config conf, IFSM fsm, List<Endpoint> cluster) throws IOException, InterruptedException {
-        endpoint_ = endpoint;
+    
+    public Node(Config conf, IFSM fsm, List<Endpoint> cluster) throws IOException, InterruptedException {
+        endpoint_ = conf.getEndpoint();
         conf_ = conf;
         cluster_ = cluster;
         fsm_ = fsm;
-    
-        stateTable_ = new StateTable(getId(), conf_);
+        id_ = conf.getId();
+        
+        
+        stateTable_ = new StateTable(conf_);
         state_ = new AtomicReference<>(State.Follower);
         voteFor_ = stateTable_.getVoteFor();
         lastVoteTerm_ = stateTable_.getLastVoteTerm();
@@ -80,8 +83,8 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         lastApplied_ = stateTable_.getLastApplied();
         grantedVotes_ = 0;
         leaderId_ = null;
-
-        logStore_ = new LeveldbLogStore(conf.getPersistenceFilePathPrefix() + getId());
+        
+        logStore_ = new LeveldbLogStore(conf.getDataDirPath());
         commitIndex_ = logStore_.getLastIndex();
     
         timeoutLock_ = new ReentrantLock();
@@ -107,7 +110,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     }
     
     public int getId() {
-        return endpoint_.getId();
+        return id_;
     }
     
     public State getState() {
@@ -124,6 +127,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     }
     
     private void setCurrentTerm(long term) {
+        debug("setcurrentTerm: " + term);
         stateTable_.storeCurrentTerm(term);
         currentTerm_.set(term);
     }
@@ -291,8 +295,9 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     }
 
     private void becomeLeader() {
-        leaderId_ = endpoint_.getId();
+        leaderId_ = getId();
         state_.set(State.Leader);
+        sendHeartbeat();
         reinitLeaderStates();
     }
     
@@ -322,24 +327,27 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     public void requestVote(RequestVoteReq req,
                             io.grpc.stub.StreamObserver<RequestVoteResp> responseObserver) {
         
-        debug("receive vote request from node: " + req.getCandidateId());
         RequestVoteResp.Builder respBuilder = RequestVoteResp.newBuilder();
-//        debug("current state: " + state_.get() +
-////                ", current term: " + currentTerm_.get() + ", req term: " + req.getTerm() + ", voteFor: " + voteFor_);
-
+        debug("req term: " + req.getTerm() + ", currentTerm: " + currentTerm_.get());
         if(req.getTerm() > currentTerm_.get()) {
-            setCurrentTerm(req.getTerm());
             if (!isFollower()) {
                 state_.set(State.Follower);
                 signalTimeoutCond();
             }
             respBuilder.setVoteGranted(true);
             updateVoteFor(req.getCandidateId());
+            lastVoteTerm_ = req.getTerm();
         } else if ((voteFor_ == null || lastVoteTerm_ == null) || lastVoteTerm_.equals(req.getTerm()) && voteFor_.equals(req.getCandidateId())) {
             respBuilder.setVoteGranted(true);
             updateVoteFor(req.getCandidateId());
         }else {
             respBuilder.setVoteGranted(false);
+        }
+    
+        if (respBuilder.getVoteGranted()) {
+            debug("grant vote to node: " + req.getCandidateId());
+        } else {
+            debug("deny vote to node: " + req.getCandidateId());
         }
         
         respBuilder.setTerm(currentTerm_.get());
@@ -367,6 +375,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
        
        // When a leader unavailable, new leader is elected, after old leader come back,
         // it will still think it's leader and send entries.
+        debug("receive entries from leader");
         long leaderTerm = req.getTerm();
         if (leaderTerm < currentTerm_.get()) {
            respBuilder.setSuccess(false);
@@ -383,6 +392,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
             
             if(req.getEntriesCount() == 0) {
                 // Handle heartbeat
+    
                 respBuilder.setSuccess(true);
             }
             else {
@@ -412,7 +422,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     @Override
     public void clientOperate(grpc.Raft.ClientReq request,
                               io.grpc.stub.StreamObserver<grpc.Raft.ClientResp> responseObserver) {
-        logger_.info("receive client op request");
+        logger_.info("receive client op request" + request.getOp());
         ClientResp resp;
         if(!isLeader()) {
             ClientResp.Builder respBuilder = ClientResp.newBuilder();
@@ -439,7 +449,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
             AppendEntriesReq.Builder builder = AppendEntriesReq.newBuilder();
             
             while(true) {
-                int followerId = endpoint_.getId();
+                int followerId = getId();
                 long preLogIndex = -1;
                 long prelogTerm = -1;
                 if (nextIndex_[followerId] > 0) {
@@ -612,19 +622,20 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     public static void main(String[] args) throws IOException, InterruptedException {
         
         Configurator.setRootLevel(Level.DEBUG);
-        Config conf = new Config();
         String host =  "localhost";
         int port = 8300;
-        IFSM fsm = new KvFsm(conf.getPersistenceFilePathPrefix() + ".kv");
         ArrayList<Node> nodes = new ArrayList<>();
         ArrayList<Endpoint> endpoints = new ArrayList<>();
         
         for(int i=0; i<5; ++i) {
-            endpoints.add(new Endpoint(i, host, port+i));
+    
+            endpoints.add(new Endpoint(host, port + i));
         }
-        
+    
         for(int i=0; i<5; ++i) {
-            nodes.add(new Node(endpoints.get(i), conf, fsm, endpoints));
+            Config conf = new Config(i, endpoints.get(i), Config.LocalServerPort + i);
+            IFSM fsm = new KvFsm(conf.getDataDirPath());
+            nodes.add(new Node(conf, fsm, endpoints));
         }
         
         Thread.sleep(30 * 1000);

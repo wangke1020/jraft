@@ -18,12 +18,15 @@ import static org.fusesource.leveldbjni.JniDBFactory.factory;
 
 public class KvFsm implements IFSM, Closeable {
     
+    private static String FILE_NAME = "kv.db";
     private DB db_;
+    
     
     public KvFsm(String logFilePath) throws IOException {
         Options options = new Options();
         options.createIfMissing(true);
-        db_ = factory.open(new File(logFilePath), options);
+        String filePath = logFilePath.endsWith("/") ? logFilePath + FILE_NAME : logFilePath + "/" + FILE_NAME;
+        db_ = factory.open(new File(filePath), options);
     }
     
     private void put(String key, String value) {
@@ -48,7 +51,7 @@ public class KvFsm implements IFSM, Closeable {
             switch (req.getOp()) {
                 case Get: {
                     Preconditions.checkArgument(req.getArgsCount() == 1);
-                    String key = req.getArgs(1);
+                    String key = req.getArgs(0);
                     String value = get(key);
                     if (value == null) return AppliedRes.newFailedRes(Error.NoSuchKey);
                     return AppliedRes.newSuccessRes(value);

@@ -12,10 +12,12 @@ import java.util.NoSuchElementException;
 
 public class LeveldbLogStore implements LogStore, Closeable {
     private String LOG_PREFIX = "log.";
+    private String FILE_NAME = "log.db";
     
     private DB db_;
+    private String logFileDir_;
     
-    public LeveldbLogStore(String logFilePath) throws IOException {
+    public LeveldbLogStore(String logFileDir) throws IOException {
     
         DBComparator comparator = new DBComparator(){
             public int compare(byte[] key1, byte[] key2) {
@@ -43,7 +45,9 @@ public class LeveldbLogStore implements LogStore, Closeable {
         Options options = new Options();
         options.comparator(comparator);
         options.createIfMissing(true);
-        db_ = factory.open(new File(logFilePath), options);
+        logFileDir_ = logFileDir;
+        if (!logFileDir_.endsWith("/")) logFileDir_ += "/";
+        db_ = factory.open(new File(logFileDir_ + FILE_NAME), options);
     }
     
     @Override

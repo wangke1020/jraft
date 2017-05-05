@@ -8,6 +8,7 @@ import javax.annotation.Nullable;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
+import java.util.UUID;
 
 import static org.fusesource.leveldbjni.JniDBFactory.asString;
 import static org.fusesource.leveldbjni.JniDBFactory.bytes;
@@ -16,20 +17,19 @@ import static org.fusesource.leveldbjni.JniDBFactory.factory;
 
 public class StateTable implements Closeable {
     
-    private String LOG_PREFIX = "state.";
+    private static String TABLE_NAME = "state.db";
     
     private DB db_;
-    private int id_;
     private String filePath_;
     private Config conf_;
     
+    private static String UUID_KEY = "uuid";
     private static String TERM_KEY = "term";
     private static String LAST_APPLIED_KEY = "last_applied";
     private static String VOTE_FOR_KEY = "vote_for";
     private static String LAST_VOTE_TERM_KEY = "last_vote_term";
     
-    public StateTable(int id, Config conf) throws IOException {
-        id_ = id;
+    public StateTable(Config conf) throws IOException {
         conf_ = conf;
         filePath_ = getFilePath();
         Options options = new Options();
@@ -39,7 +39,7 @@ public class StateTable implements Closeable {
     }
     
     public String getFilePath() {
-        return conf_.getPersistenceFilePathPrefix() + LOG_PREFIX + id_;
+        return conf_.getDataDirPath().endsWith("/") ? conf_.getDataDirPath() + TABLE_NAME : conf_.getDataDirPath() + "/" + TABLE_NAME;
     }
     
     @Nullable
@@ -113,6 +113,22 @@ public class StateTable implements Closeable {
     
     public void storeLastVoteTerm(long term) {
         storeLongValue(LAST_VOTE_TERM_KEY, term);
+    }
+    
+    
+    public UUID getUUID() {
+        String uuidStr = getValue(UUID_KEY);
+        if (uuidStr == null) {
+            UUID uuid = UUID.randomUUID();
+            storeUUID(uuid);
+            return uuid;
+        }
+        
+        return UUID.fromString(uuidStr);
+    }
+    
+    private void storeUUID(UUID uuid) {
+        storeValue(UUID_KEY, uuid.toString());
     }
     
     @Override

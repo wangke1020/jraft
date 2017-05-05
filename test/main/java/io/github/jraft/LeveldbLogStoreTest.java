@@ -11,14 +11,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class LeveldbLogStoreTest {
-    private static String LOG_FILE_PATH = "/tmp/test.db";
+    private static String LOG_DIR_PATH = "/tmp/test";
     private LeveldbLogStore logStore_;
     
     @Before
     public void beforeTest() throws IOException {
-        deleteFile(LOG_FILE_PATH);
-        
-        logStore_ = new LeveldbLogStore(LOG_FILE_PATH);
+        deleteFile(LOG_DIR_PATH);
+        FileUtils.forceMkdir(new File(LOG_DIR_PATH));
+        logStore_ = new LeveldbLogStore(LOG_DIR_PATH);
     }
     
     private static void deleteFile(String filePath) throws IOException {
@@ -28,13 +28,13 @@ public class LeveldbLogStoreTest {
     
     @After
     public void afterTest() throws IOException {
-        deleteFile(LOG_FILE_PATH);
+        deleteFile(LOG_DIR_PATH);
         logStore_.close();
     }
     
     @AfterClass
     public static void after() throws IOException {
-        deleteFile(LOG_FILE_PATH);
+        deleteFile(LOG_DIR_PATH);
     }
     
     @Test
