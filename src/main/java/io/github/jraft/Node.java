@@ -136,9 +136,8 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         setCurrentTerm(currentTerm_.get() + 1);
     }
     
-    private long incrAndGetLastApplied() {
-        stateTable_.storeLastApplied(lastApplied_ + 1);
-        return ++lastApplied_;
+    private void incrLastApplied() {
+        stateTable_.storeLastApplied(++lastApplied_);
     }
     
     private void updateVoteFor(int voteForCandId) {
@@ -375,7 +374,6 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
        
        // When a leader unavailable, new leader is elected, after old leader come back,
         // it will still think it's leader and send entries.
-        debug("receive entries from leader");
         long leaderTerm = req.getTerm();
         if (leaderTerm < currentTerm_.get()) {
            respBuilder.setSuccess(false);
@@ -397,14 +395,18 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
             }
             else {
                 // Handle append entries
+                debug("req prelog index: " + req.getPreLogIndex());
                 Log log = logStore_.getLog(req.getPreLogIndex());
-                if (log == null || log.getTerm() != req.getPreLogTerm())
-                    respBuilder.setSuccess(false);
-                else {
+                debug("log is null? : " + (log == null));
+                if ((log != null && log.getTerm() == req.getPreLogTerm()) || (req.getPreLogIndex() == -1 && logStore_.getLastIndex() == -1)) {
+                    // preLog exists and term of preLog equals with req.getPreLogTerm(),
+                    // or no logs on both leader and follower, return success. 
+                    
                     List<Log> logs = req.getEntriesList();
                     logStore_.storeLog(logs);
-                    
                     respBuilder.setSuccess(true);
+                } else {
+                    respBuilder.setSuccess(false);
                 }
             }
             
@@ -437,13 +439,18 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         responseObserver.onCompleted();
     }
     
+    /**
+     * Callable Job for leader to dispatch entires received from client
+     * to followers.
+     */
     class DispatchEntriesJob implements Callable<Object> {
-    
+        
         private Endpoint endpoint_;
         
         public DispatchEntriesJob(Endpoint endpoint) {
             endpoint_ = endpoint;
         }
+        
         @Override
         public Object call() throws Exception {
             AppendEntriesReq.Builder builder = AppendEntriesReq.newBuilder();
@@ -457,28 +464,23 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                     prelogTerm = preLog.getTerm();
                     preLogIndex = preLog.getIndex();
                 }
-    
-                List<Log> logs = logStore_.getLogs(nextIndex_[followerId], commitIndex_);
-    
-                builder.addAllEntries(logs)
-                        .setLeaderId(getId())
-                        .setLeaderCommit(commitIndex_)
-                        .setPreLogIndex(preLogIndex)
-                        .setPreLogTerm(prelogTerm)
-                        .setTerm(currentTerm_.get());
-    
+                
+                long lastIndex = logStore_.getLastIndex();
+                List<Log> logs = logStore_.getLogs(nextIndex_[followerId], lastIndex);
+                debug("dispatch log length: " + logs.size());
+                
+                builder.addAllEntries(logs).setLeaderId(getId()).setLeaderCommit(commitIndex_).setPreLogIndex(preLogIndex).setPreLogTerm(prelogTerm).setTerm(currentTerm_.get());
+                
                 Channel channel = NettyChannelBuilder.forAddress(endpoint_.getHost(), endpoint_.getPort()).
                         negotiationType(NegotiationType.PLAINTEXT).build();
                 RaftCommServiceGrpc.RaftCommServiceBlockingStub stub = RaftCommServiceGrpc.newBlockingStub(channel);
                 AppendEntriesResp resp = stub.appendEntries(builder.build());
                 if(resp.getSuccess()) {
-                    nextIndex_[followerId] = commitIndex_ + 1;
-                    matchIndex_[followerId] = commitIndex_;
+                    nextIndex_[followerId] = lastIndex + 1;
+                    matchIndex_[followerId] = lastIndex;
                     break;
-                }
-                else {
-                    if(--nextIndex_[followerId] < 0)
-                        throw new Exception("why nexIndex < 0? ");
+                } else {
+                    if(--nextIndex_[followerId] < 0) throw new Exception("why nexIndex < 0? ");
                 }
             }
             return new Object();
@@ -530,6 +532,9 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+    
+            // commit log
+            applyFSM(++commitIndex_);
         
             // Notify followers to commit log
             List<ListenableFuture<AppendEntriesResp>> futures = sendHeartbeat();
@@ -558,14 +563,13 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                 e.printStackTrace();
             }
         }
-    
-        applyFSM(++commitIndex_);
 
         return ClientResp.newBuilder().setSuccess(true).build();
     }
     
     private void applyFSM(long index) {
-        while (incrAndGetLastApplied() <= index) {
+        while (lastApplied_ + 1 <= index) {
+            incrLastApplied();
             applyFsm(logStore_.getLog(lastApplied_));
         }
     }

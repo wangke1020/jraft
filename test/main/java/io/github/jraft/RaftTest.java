@@ -30,6 +30,7 @@ class MockFSM implements IFSM {
     
     @Override
     public AppliedRes apply(Log log) {
+        System.out.println("===============>MockFSM: add log to list");
         logs_.add(log);
         return AppliedRes.newSuccessRes();
     }
@@ -180,7 +181,7 @@ public class RaftTest {
         Node n1 = cluster.get(1);
         Node n2 = cluster.get(2);
         Config conf = n0.getConf();
-        Thread.sleep((conf.getFollowerTimeoutSec() + conf.getCandidateTimeoutSec()) * 2 * 1000);
+        Thread.sleep((conf.getFollowerTimeoutSec() + conf.getCandidateTimeoutSec()) * 1000);
         
         Integer leaderId = n0.getLeaderId();
         Assert.assertNotNull("leader id should not be null", leaderId);
@@ -193,6 +194,23 @@ public class RaftTest {
         try (TestClient testClient = new TestClient(leader.getEndpoint().getHost(), leader.getConf().getLocalServerPort())) {
             ClientResp resp = testClient.put("test", "test");
             Assert.assertTrue(resp.getSuccess());
+    
+            for (Node n : cluster.getNodeList()) {
+                MockFSM fsm = (MockFSM) n.getFsm();
+                Assert.assertEquals("1 msg in fsm should be applied in node: " + n.getId(), 1, fsm.getLogNum());
+            }
+    
+            System.out.println("put again");
+            // put again
+            resp = testClient.put("test2", "test");
+            Assert.assertTrue(resp.getSuccess());
+    
+            for (Node n : cluster.getNodeList()) {
+                MockFSM fsm = (MockFSM) n.getFsm();
+                Assert.assertEquals("2 msg in fsm should be applied in node: " + n.getId(), 2, fsm.getLogNum());
+            }
+    
         }
     }
+    
 }

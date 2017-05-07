@@ -110,7 +110,7 @@ public class LeveldbLogStore implements LogStore, Closeable {
     @Override
     public List<Raft.Log> getLogs(long start, long end) {
         List<Raft.Log> logs = new ArrayList<>();
-        for(long i=start;i<end;++i) {
+        for (long i = start; i <= end; ++i) {
             logs.add(getLog(i));
         }
         return logs;
