@@ -2,6 +2,8 @@ package io.github.jraft;
 
 import grpc.Raft.Log;
 
+import java.io.Closeable;
+
 class AppliedRes {
     
     enum Error {
@@ -44,6 +46,6 @@ class AppliedRes {
     }
 }
 
-interface IFSM {
+interface IFSM extends Closeable {
     AppliedRes apply(Log log);
 }

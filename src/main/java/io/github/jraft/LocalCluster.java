@@ -1,16 +1,20 @@
 package io.github.jraft;
 
+import com.google.common.base.Preconditions;
+
+import javax.annotation.Nullable;
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-public class LocalCluster {
+public class LocalCluster implements Closeable {
     
     private HashMap<Integer, Node> nodes_;
     
     public LocalCluster(int n, Class<?> fsmClass, String rootDataDir) throws ReflectiveOperationException, IOException, InterruptedException {
-        
+        Preconditions.checkArgument(n > 0);
         nodes_ = new HashMap<>();
         int startPort = 5555;
         
@@ -38,5 +42,22 @@ public class LocalCluster {
     
     public int size() {
         return nodes_.size();
+    }
+    
+    public void shutdown() {
+        for (Node n : nodes_.values()) {
+            n.shutdown();
+        }
+    }
+    
+    @Nullable
+    public Integer getLeaderId() {
+        Node n0 = nodes_.get(0);
+        return n0.getLeaderId();
+    }
+    
+    @Override
+    public void close() throws IOException {
+        shutdown();
     }
 }

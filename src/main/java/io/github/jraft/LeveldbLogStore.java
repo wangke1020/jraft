@@ -10,7 +10,7 @@ import static org.fusesource.leveldbjni.JniDBFactory.*;
 import java.io.*;
 import java.util.NoSuchElementException;
 
-public class LeveldbLogStore implements LogStore, Closeable {
+public class LeveldbLogStore implements LogStore {
     private String LOG_PREFIX = "log.";
     private String FILE_NAME = "log.db";
     

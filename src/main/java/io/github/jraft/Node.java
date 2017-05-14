@@ -3,6 +3,7 @@ package io.github.jraft;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Condition;
@@ -268,7 +269,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                     }
                     debug("isVotedGrated: " + resp.getVoteGranted());
                     if(resp.getTerm() > currentTerm_.get()) {
-                        state_.set(State.Follower);
+                        becomeFollower();
                         signalTimeoutCond();
                         return;
                     }
@@ -292,34 +293,82 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     
         awaitFor(getCandidateTimeoutMilliSec());
     }
+    
+    private void becomeFollower() {
+        leaderId_ = null;
+        state_.set(State.Follower);
+    }
 
     private void becomeLeader() {
         leaderId_ = getId();
         state_.set(State.Leader);
-        sendHeartbeat();
+        boolean success = dispatchHeartbeat(conf_.getRequestTimeoutSec());
+        if (!success) becomeFollower();
+        
         reinitLeaderStates();
     }
     
     private void runLeader() {
-        sendHeartbeat();
+        boolean success = dispatchHeartbeat(conf_.getRequestTimeoutSec());
+        if (!success) becomeFollower();
+        
         awaitFor(conf_.getLeaderHbIntervalSec() * 1000);
     }
     
-    private List<ListenableFuture<AppendEntriesResp>> sendHeartbeat() {
+    private boolean dispatchHeartbeat(int timeoutSecs) {
         AppendEntriesReq req = AppendEntriesReq.newBuilder()
                 .setTerm(currentTerm_.get())
                 .setLeaderCommit(commitIndex_)
                 .build();
         debug("I am leader, send heartbeat");
         List<ListenableFuture<AppendEntriesResp>> futures = new LinkedList<>();
-        for(Endpoint ep : getOthers()) {
+        List<Endpoint> others = getOthers();
+        if (others.isEmpty()) return true;
+        
+        for (Endpoint ep : others) {
             Channel channel = NettyChannelBuilder.forAddress(ep.getHost(), ep.getPort()).
                     negotiationType(NegotiationType.PLAINTEXT).build();
             RaftCommServiceFutureStub stub = RaftCommServiceGrpc.newFutureStub(channel);
             futures.add(stub.appendEntries(req));
         }
         
-        return futures;
+        final int quorumNum = getQuorumNum();
+        final CountDownLatch appendEntriesLatch = new CountDownLatch(quorumNum);
+        final AtomicInteger failureCount = new AtomicInteger(0);
+        for (ListenableFuture<AppendEntriesResp> future : futures) {
+            Futures.addCallback(future, new FutureCallback<AppendEntriesResp>() {
+                @Override
+                public void onSuccess(@Nullable AppendEntriesResp result) {
+                    if (result == null) return;
+                    if (result.getSuccess()) {
+                        appendEntriesLatch.countDown();
+                    } else {
+                        if (failureCount.incrementAndGet() >= quorumNum) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                }
+                
+                @Override
+                public void onFailure(Throwable t) {
+                    if (failureCount.incrementAndGet() >= quorumNum) {
+                        Thread.currentThread().interrupt();
+                    }
+                    debug(t.getMessage());
+                }
+            });
+        }
+        
+        try {
+            boolean timeout = !appendEntriesLatch.await(timeoutSecs, TimeUnit.SECONDS);
+            if (timeout) {
+                return false;
+            }
+        } catch (InterruptedException e) {
+            // too much failures.
+            return false;
+        }
+        return true;
     }
     
     @Override
@@ -330,7 +379,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         debug("req term: " + req.getTerm() + ", currentTerm: " + currentTerm_.get());
         if(req.getTerm() > currentTerm_.get()) {
             if (!isFollower()) {
-                state_.set(State.Follower);
+                becomeFollower();
                 signalTimeoutCond();
             }
             respBuilder.setVoteGranted(true);
@@ -509,8 +558,10 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         List<Endpoint> endpoints = getOthers();
         if (!endpoints.isEmpty()) {
             ListeningExecutorService service = MoreExecutors.listeningDecorator(Executors.newCachedThreadPool());
-            final CountDownLatch countDownLatch = new CountDownLatch(getQuorumNum());
-        
+            final int quorumNum = getQuorumNum();
+            final CountDownLatch countDownLatch = new CountDownLatch(quorumNum);
+            final AtomicInteger failureCount = new AtomicInteger(0);
+    
             for (Endpoint endpoint : getOthers()) {
                 ListenableFuture<Object> future = service.submit(new DispatchEntriesJob(endpoint));
                 Futures.addCallback(future, new FutureCallback<Object>() {
@@ -518,50 +569,34 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                     public void onSuccess(@Nullable Object result) {
                         countDownLatch.countDown();
                     }
-                
+    
                     @Override
                     public void onFailure(Throwable t) {
+                        if (failureCount.incrementAndGet() >= quorumNum) Thread.currentThread().interrupt();
                         t.printStackTrace();
                     }
                 });
             }
             try {
                 boolean timeout = !countDownLatch.await(10, TimeUnit.SECONDS);
-                if (timeout) return ClientResp.newBuilder().setSuccess(false).setError("timeout").build();
-            
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+                if (timeout) {
+                    becomeFollower();
+                    return ClientResp.newBuilder().setSuccess(false).setError("timeout").build();
+                }
     
-            // commit log
-            applyFSM(++commitIndex_);
-        
-            // Notify followers to commit log
-            List<ListenableFuture<AppendEntriesResp>> futures = sendHeartbeat();
-            final CountDownLatch appendEntriesLatch = new CountDownLatch(getQuorumNum());
-            for (ListenableFuture<AppendEntriesResp> future : futures) {
-                Futures.addCallback(future, new FutureCallback<AppendEntriesResp>() {
-                    @Override
-                    public void onSuccess(@Nullable AppendEntriesResp result) {
-                        if (result == null) return;
-                        if (result.getSuccess()) {
-                            appendEntriesLatch.countDown();
-                        }
-                    }
-                
-                    @Override
-                    public void onFailure(Throwable t) {
-                        debug(t.getMessage());
-                    }
-                });
-            }
-        
-            try {
-                boolean timeout = !appendEntriesLatch.await(10, TimeUnit.SECONDS);
-                if (timeout) return ClientResp.newBuilder().setSuccess(false).setError("timeout").build();
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                return ClientResp.newBuilder().setSuccess(false).build();
             }
+        }
+    
+        // commit log
+        applyFSM(++commitIndex_);
+    
+        // Notify followers to commit log
+        boolean success = dispatchHeartbeat(conf_.getRequestTimeoutSec());
+        if (!success) {
+            becomeFollower();
+            ClientResp.newBuilder().setSuccess(false).build();
         }
 
         return ClientResp.newBuilder().setSuccess(true).build();
@@ -621,6 +656,14 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         isRunning_ = false;
         gRpcServer_.shutdown();
         gCommServer_.shutdown();
+        try {
+            stateTable_.close();
+            logStore_.close();
+            fsm_.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    
     }
     
     public static void main(String[] args) throws IOException, InterruptedException {

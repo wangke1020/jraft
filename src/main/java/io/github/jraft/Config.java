@@ -12,6 +12,8 @@ public class Config {
 
     private static int LeaderHbIntervalSec = 5;
     
+    private static int RequestTimeoutSec = 5;
+    
     private static String DEFAULT_ROOT_DATA_DIR = "/opt/test/raft/";
     
     private String dataDir_;
@@ -34,6 +36,10 @@ public class Config {
 
     public int getLeaderHbIntervalSec() {
         return LeaderHbIntervalSec;
+    }
+    
+    public int getRequestTimeoutSec() {
+        return RequestTimeoutSec;
     }
     
     public String getDataDirPath() {

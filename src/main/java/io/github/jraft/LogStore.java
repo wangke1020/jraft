@@ -3,9 +3,10 @@ package io.github.jraft;
 
 import grpc.Raft.Log;
 
+import java.io.Closeable;
 import java.util.List;
 
-public interface LogStore {
+public interface LogStore extends Closeable {
     long getFirstIndex();
     long getLastIndex();
     Log getLog(long index);
