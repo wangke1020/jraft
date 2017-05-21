@@ -26,19 +26,19 @@ public class Config {
     
     private int localSrvPort_;
 
-    public int getFollowerTimeoutSec() {
+    public static int getFollowerTimeoutSec() {
         return FollowerTimeoutSec;
     }
 
-    public int getCandidateTimeoutSec() {
+    public static int getCandidateTimeoutSec() {
         return CandidateTimeoutSec;
     }
 
-    public int getLeaderHbIntervalSec() {
+    public static int getLeaderHbIntervalSec() {
         return LeaderHbIntervalSec;
     }
     
-    public int getRequestTimeoutSec() {
+    public static int getRequestTimeoutSec() {
         return RequestTimeoutSec;
     }
     

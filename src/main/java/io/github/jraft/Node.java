@@ -17,6 +17,7 @@ import grpc.RaftCommServiceGrpc;
 import grpc.RaftCommServiceGrpc.RaftCommServiceFutureStub;
 import io.grpc.Channel;
 import io.grpc.Server;
+import io.grpc.StatusRuntimeException;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
@@ -125,6 +126,10 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     @Nullable
     public Integer getLeaderId() {
         return leaderId_;
+    }
+
+    public long getCurrentTerm() {
+        return currentTerm_.get();
     }
     
     private void setCurrentTerm(long term) {
@@ -303,8 +308,10 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         leaderId_ = getId();
         state_.set(State.Leader);
         boolean success = dispatchHeartbeat(conf_.getRequestTimeoutSec());
-        if (!success) becomeFollower();
-        
+        if (!success) {
+            debug("failed to dispatch heartbeat, can not become leader");
+            becomeFollower();
+        }
         reinitLeaderStates();
     }
     
@@ -333,7 +340,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         }
         
         final int quorumNum = getQuorumNum();
-        final CountDownLatch appendEntriesLatch = new CountDownLatch(quorumNum);
+        final CountDownLatch appendEntriesLatch = new CountDownLatch(quorumNum-1);
         final AtomicInteger failureCount = new AtomicInteger(0);
         for (ListenableFuture<AppendEntriesResp> future : futures) {
             Futures.addCallback(future, new FutureCallback<AppendEntriesResp>() {
@@ -362,6 +369,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         try {
             boolean timeout = !appendEntriesLatch.await(timeoutSecs, TimeUnit.SECONDS);
             if (timeout) {
+                debug("append entries timeout, return false");
                 return false;
             }
         } catch (InterruptedException e) {
@@ -380,12 +388,13 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         if(req.getTerm() > currentTerm_.get()) {
             if (!isFollower()) {
                 becomeFollower();
-                signalTimeoutCond();
             }
+            signalTimeoutCond();
             respBuilder.setVoteGranted(true);
             updateVoteFor(req.getCandidateId());
             lastVoteTerm_ = req.getTerm();
         } else if ((voteFor_ == null || lastVoteTerm_ == null) || lastVoteTerm_.equals(req.getTerm()) && voteFor_.equals(req.getCandidateId())) {
+            signalTimeoutCond();
             respBuilder.setVoteGranted(true);
             updateVoteFor(req.getCandidateId());
         }else {
@@ -447,7 +456,9 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                 debug("req prelog index: " + req.getPreLogIndex());
                 Log log = logStore_.getLog(req.getPreLogIndex());
                 debug("log is null? : " + (log == null));
-                if ((log != null && log.getTerm() == req.getPreLogTerm()) || (req.getPreLogIndex() == -1 && logStore_.getLastIndex() == -1)) {
+
+                if ((log != null && log.getTerm() == req.getPreLogTerm()) ||
+                        (req.getPreLogIndex() == -1 && logStore_.getLastIndex() == -1)) {
                     // preLog exists and term of preLog equals with req.getPreLogTerm(),
                     // or no logs on both leader and follower, return success. 
                     
@@ -492,7 +503,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
      * Callable Job for leader to dispatch entires received from client
      * to followers.
      */
-    class DispatchEntriesJob implements Callable<Object> {
+    class DispatchEntriesJob implements Callable<Boolean> {
         
         private Endpoint endpoint_;
         
@@ -501,38 +512,53 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         }
         
         @Override
-        public Object call() throws Exception {
+        public Boolean call() throws Exception {
             AppendEntriesReq.Builder builder = AppendEntriesReq.newBuilder();
             
             while(true) {
                 int followerId = getId();
-                long preLogIndex = -1;
-                long prelogTerm = -1;
-                if (nextIndex_[followerId] > 0) {
-                    Log preLog = logStore_.getLog(nextIndex_[followerId] - 1);
-                    prelogTerm = preLog.getTerm();
-                    preLogIndex = preLog.getIndex();
-                }
-                
                 long lastIndex = logStore_.getLastIndex();
-                List<Log> logs = logStore_.getLogs(nextIndex_[followerId], lastIndex);
+                long preLogIndex = -1;
+                long preLogTerm = -1;
+                long startLogIndex;
+
+                if (nextIndex_[followerId] > 0) {
+                    startLogIndex = nextIndex_[followerId];
+                } else {
+                    // the first time leader dispatch log,
+                    startLogIndex = lastIndex;
+                }
+                Log preLog = logStore_.getLog(startLogIndex - 1);
+                if(preLog != null) {
+                    preLogIndex = preLog.getIndex();
+                    preLogTerm = preLog.getTerm();
+                }
+
+                List<Log> logs = logStore_.getLogs(startLogIndex, lastIndex);
                 debug("dispatch log length: " + logs.size());
                 
-                builder.addAllEntries(logs).setLeaderId(getId()).setLeaderCommit(commitIndex_).setPreLogIndex(preLogIndex).setPreLogTerm(prelogTerm).setTerm(currentTerm_.get());
+                builder.addAllEntries(logs).setLeaderId(getId()).setLeaderCommit(commitIndex_).setPreLogIndex(preLogIndex).setPreLogTerm(preLogTerm).setTerm(currentTerm_.get());
                 
                 Channel channel = NettyChannelBuilder.forAddress(endpoint_.getHost(), endpoint_.getPort()).
                         negotiationType(NegotiationType.PLAINTEXT).build();
                 RaftCommServiceGrpc.RaftCommServiceBlockingStub stub = RaftCommServiceGrpc.newBlockingStub(channel);
-                AppendEntriesResp resp = stub.appendEntries(builder.build());
+                AppendEntriesResp resp;
+                try {
+                    resp = stub.appendEntries(builder.build());
+                }catch (StatusRuntimeException e) {
+                    logger_.debug("" , e);
+                    return false;
+                }
                 if(resp.getSuccess()) {
                     nextIndex_[followerId] = lastIndex + 1;
                     matchIndex_[followerId] = lastIndex;
                     break;
                 } else {
-                    if(--nextIndex_[followerId] < 0) throw new Exception("why nexIndex < 0? ");
+                    if(--nextIndex_[followerId] < 0)
+                        throw new Exception("why nexIndex < 0? when appending entries to " + endpoint_);
                 }
             }
-            return new Object();
+            return true;
         }
     }
     
@@ -559,21 +585,22 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         if (!endpoints.isEmpty()) {
             ListeningExecutorService service = MoreExecutors.listeningDecorator(Executors.newCachedThreadPool());
             final int quorumNum = getQuorumNum();
-            final CountDownLatch countDownLatch = new CountDownLatch(quorumNum);
+            final CountDownLatch countDownLatch = new CountDownLatch(quorumNum-1);
             final AtomicInteger failureCount = new AtomicInteger(0);
     
             for (Endpoint endpoint : getOthers()) {
-                ListenableFuture<Object> future = service.submit(new DispatchEntriesJob(endpoint));
-                Futures.addCallback(future, new FutureCallback<Object>() {
+                ListenableFuture<Boolean> future = service.submit(new DispatchEntriesJob(endpoint));
+                Futures.addCallback(future, new FutureCallback<Boolean>() {
                     @Override
-                    public void onSuccess(@Nullable Object result) {
-                        countDownLatch.countDown();
+                    public void onSuccess(@Nullable Boolean result) {
+                        if(result != null && result)
+                            countDownLatch.countDown();
                     }
     
                     @Override
                     public void onFailure(Throwable t) {
                         if (failureCount.incrementAndGet() >= quorumNum) Thread.currentThread().interrupt();
-                        t.printStackTrace();
+                        logger_.warn("", t);
                     }
                 });
             }
@@ -632,7 +659,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                 .addService(this)
                 .build();
         gCommServer_.start();
-    
+
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             // Use stderr here since the logger may have been reset by its JVM shutdown hook.
             System.err.println("*** shutting down gRPC server since JVM is shutting down");
@@ -647,15 +674,24 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         gRpcServer_.start();
     }
 
-
-    
-    public void shutdown() {
-        debug("is shut down");
+    public void fail() {
         leaderId_ = null;
         state_.set(State.Shutdown);
         isRunning_ = false;
         gRpcServer_.shutdown();
         gCommServer_.shutdown();
+    }
+
+    public void resume() throws IOException {
+        state_.set(State.Follower);
+        startRpcServer();
+        startCommServer();
+        isRunning_ = true;
+    }
+    
+    public void shutdown() {
+        debug("is shut down");
+        fail();
         try {
             stateTable_.close();
             logStore_.close();

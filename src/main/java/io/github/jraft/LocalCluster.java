@@ -49,11 +49,19 @@ public class LocalCluster implements Closeable {
             n.shutdown();
         }
     }
-    
-    @Nullable
-    public Integer getLeaderId() {
-        Node n0 = nodes_.get(0);
-        return n0.getLeaderId();
+
+    public Node getLeader() throws Exception {
+        List<Node> leaders = new ArrayList<>();
+        for(Node n : nodes_.values()) {
+            if(n.isLeader())
+                leaders.add(n);
+        }
+
+        if(leaders.isEmpty())
+            throw new Exception("no leader elected");
+        if(leaders.size() > 1)
+            throw new Exception("more than one leader elected");
+        return leaders.get(0);
     }
     
     @Override

@@ -33,6 +33,10 @@ public class Endpoint {
     public int hashCode() {
         return port_ * 31 + host_.hashCode();
     }
-    
+
+    @Override
+    public String toString() {
+        return host_ + ":" + port_;
+    }
     
 }
