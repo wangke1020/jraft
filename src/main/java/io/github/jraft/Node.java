@@ -361,7 +361,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                     if (failureCount.incrementAndGet() >= quorumNum) {
                         Thread.currentThread().interrupt();
                     }
-                    debug(t.getMessage());
+                    debug("failed to appendEntries, reason: " +  t.getMessage());
                 }
             });
         }
@@ -546,7 +546,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                 try {
                     resp = stub.appendEntries(builder.build());
                 }catch (StatusRuntimeException e) {
-                    logger_.debug("" , e);
+                    logger_.debug("failed to append entiries to " + endpoint_ , e);
                     return false;
                 }
                 if(resp.getSuccess()) {

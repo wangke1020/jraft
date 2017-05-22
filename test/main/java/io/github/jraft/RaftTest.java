@@ -275,11 +275,11 @@ public class RaftTest {
             // Ensure the term is greater
             Assert.assertTrue(newLeader.getCurrentTerm() > term);
 
-            // Apply should work on newer leader
-            applyDummyKv(newLeader);
-
             // resume old firstLeader
             firstLeader.resume();
+
+            // Apply should work on newer leader
+            applyDummyKv(newLeader);
 
             // Apply should work not work on old firstLeader
             try (TestClient testClient = new TestClient(firstLeader.getEndpoint().getHost(), firstLeader.getConf().getLocalServerPort())) {
