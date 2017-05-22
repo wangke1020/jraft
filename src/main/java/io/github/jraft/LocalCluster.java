@@ -11,11 +11,10 @@ import java.util.List;
 
 public class LocalCluster implements Closeable {
     
-    private HashMap<Integer, Node> nodes_;
+    private HashMap<Integer, Node> nodes_ = new HashMap<>();
     
     public LocalCluster(int n, Class<?> fsmClass, String rootDataDir) throws ReflectiveOperationException, IOException, InterruptedException {
         Preconditions.checkArgument(n > 0);
-        nodes_ = new HashMap<>();
         int startPort = 5555;
         
         ArrayList<Endpoint> endpoints = new ArrayList<>();
@@ -29,6 +28,16 @@ public class LocalCluster implements Closeable {
             
             IFSM fsm = (IFSM) fsmClass.getConstructor(String.class).newInstance(conf.getDataDirPath());
             nodes_.put(i, new Node(conf, fsm, endpoints));
+        }
+    }
+
+    public LocalCluster(HashMap<Integer, Node> nodes) {
+        nodes_.putAll(nodes);
+    }
+
+    public LocalCluster(List<Node> nodes) {
+        for(int i=0;i<nodes.size();++i) {
+            nodes_.put(i, nodes.get(i));
         }
     }
     

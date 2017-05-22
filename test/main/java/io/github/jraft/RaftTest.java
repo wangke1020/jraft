@@ -14,6 +14,7 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -73,7 +74,12 @@ public class RaftTest {
     }
 
     private Node waitLeaderElected(LocalCluster cluster) throws Exception {
-        Thread.sleep((Config.getFollowerTimeoutSec() + Config.getCandidateTimeoutSec())  * 2 * 1000);
+        return waitLeaderElected(cluster,
+                (Config.getFollowerTimeoutSec() + Config.getCandidateTimeoutSec())  * 2 * 1000);
+    }
+
+    private Node waitLeaderElected(LocalCluster cluster, int waitmilliSecs) throws Exception {
+        Thread.sleep(waitmilliSecs);
         Node leader = cluster.getLeader();
         Assert.assertTrue(leader.isLeader());
         return leader;
@@ -202,9 +208,6 @@ public class RaftTest {
     @Test
     public void testThreeNodesWithMockFsm() throws Exception {
         try (LocalCluster cluster = new LocalCluster(3, MockFSM.class, tmpFolder_)) {
-            Node n0 = cluster.get(0);
-            Node n1 = cluster.get(1);
-            Node n2 = cluster.get(2);
 
             Node leader =  waitLeaderElected(cluster);
 
@@ -296,6 +299,47 @@ public class RaftTest {
                 MockFSM fsm = (MockFSM) n.getFsm();
                 Assert.assertEquals("2 msg in fsm should be applied in node: " + n.getId(), 2, fsm.getLogNum());
             }
+        }
+    }
+
+    @Test
+    public void test2FollowersTimeoutAtSameTime() throws Exception {
+        class MockNode extends Node {
+
+            int i = 0;
+            public MockNode(Config conf, IFSM fsm, List<Endpoint> cluster) throws IOException, InterruptedException {
+                super(conf, fsm, cluster);
+            }
+
+            @Override
+            public int getFollowerTimeoutMillSec() {
+                // Return mockTimeout as first time
+                if(i++ == 0) {
+                    System.out.println("==========> return timeout time: " +  Config.getFollowerTimeoutSec() * 1000);
+                    return Config.getFollowerTimeoutSec() * 1000;
+                }
+                return super.getFollowerTimeoutMillSec();
+            }
+        }
+
+        List<Node> nodes = new ArrayList<>();
+        int startPort = 5555;
+        ArrayList<Endpoint> endpoints = new ArrayList<>();
+        for (int i = 0; i < 3; ++i) {
+            endpoints.add(new Endpoint("localhost", startPort + i));
+        }
+
+        for (int i = 0; i < 3; ++i) {
+            Config conf = new Config(i, endpoints.get(i), Config.LocalServerPort + i, tmpFolder_);
+
+            IFSM fsm = new MockFSM(conf.getDataDirPath());
+            if(i<2) nodes.add(new MockNode(conf, fsm, endpoints));
+            else    nodes.add(new Node(conf, fsm, endpoints));
+        }
+
+
+        try (LocalCluster cluster = new LocalCluster(nodes)) {
+            waitLeaderElected(cluster);
         }
     }
 }

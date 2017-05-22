@@ -9,6 +9,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.*;
 import com.google.protobuf.ByteString;
@@ -185,8 +187,9 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     public boolean isFollower() {
         return getState().equals(State.Follower);
     }
-    
-    private int getFollowerTimeoutMillSec() {
+
+    @VisibleForTesting
+    public int getFollowerTimeoutMillSec() {
         return (new Random().nextInt(150)
                 + conf_.getFollowerTimeoutSec() * 1000 + 1);
     }
