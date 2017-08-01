@@ -1,4 +1,5 @@
 # jraft
+[![Build Status](https://travis-ci.org/wangke1020/jraft.svg?branch=master)](https://travis-ci.org/wangke1020/jraft)
 [Raft](https://raft.github.io/raft.pdf) implementaion
 
 #### Dependency:

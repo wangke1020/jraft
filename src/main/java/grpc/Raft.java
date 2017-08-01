@@ -22,10 +22,12 @@ public final class Raft {
     /**
      * <code>Put = 0;</code>
      */
-    Put(0), /**
+    Put(0),
+    /**
      * <code>Get = 1;</code>
      */
-    Get(1), /**
+    Get(1),
+    /**
      * <code>Del = 2;</code>
      */
     Del(2),
@@ -64,10 +66,8 @@ public final class Raft {
 
     public static Op forNumber(int value) {
       switch (value) {
-        case 0:
-          return Put;
-        case 1:
-          return Get;
+        case 0: return Put;
+        case 1: return Get;
         case 2: return Del;
         default: return null;
       }
@@ -4148,7 +4148,8 @@ public final class Raft {
     /**
      * <code>repeated string result = 2;</code>
      */
-    java.util.List<java.lang.String> getResultList();
+    java.util.List<java.lang.String>
+        getResultList();
     /**
      * <code>repeated string result = 2;</code>
      */
@@ -4276,7 +4277,8 @@ public final class Raft {
     /**
      * <code>repeated string result = 2;</code>
      */
-    public com.google.protobuf.ProtocolStringList getResultList() {
+    public com.google.protobuf.ProtocolStringList
+        getResultList() {
       return result_;
     }
     /**
@@ -4294,7 +4296,8 @@ public final class Raft {
     /**
      * <code>repeated string result = 2;</code>
      */
-    public com.google.protobuf.ByteString getResultBytes(int index) {
+    public com.google.protobuf.ByteString
+        getResultBytes(int index) {
       return result_.getByteString(index);
     }
 
@@ -4361,7 +4364,8 @@ public final class Raft {
 
       size = 0;
       if (success_ != false) {
-        size += com.google.protobuf.CodedOutputStream.computeBoolSize(1, success_);
+        size += com.google.protobuf.CodedOutputStream
+          .computeBoolSize(1, success_);
       }
       {
         int dataSize = 0;
@@ -4390,7 +4394,8 @@ public final class Raft {
       grpc.Raft.ClientResp other = (grpc.Raft.ClientResp) obj;
 
       boolean result = true;
-      result = result && (getSuccess() == other.getSuccess());
+      result = result && (getSuccess()
+          == other.getSuccess());
       result = result && getResultList()
           .equals(other.getResultList());
       result = result && getError()
@@ -4406,7 +4411,8 @@ public final class Raft {
       int hash = 41;
       hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + SUCCESS_FIELD_NUMBER;
-      hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(getSuccess());
+      hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+          getSuccess());
       if (getResultCount() > 0) {
         hash = (37 * hash) + RESULT_FIELD_NUMBER;
         hash = (53 * hash) + getResultList().hashCode();
@@ -4685,12 +4691,13 @@ public final class Raft {
         if (!((bitField0_ & 0x00000002) == 0x00000002)) {
           result_ = new com.google.protobuf.LazyStringArrayList(result_);
           bitField0_ |= 0x00000002;
-        }
+         }
       }
       /**
        * <code>repeated string result = 2;</code>
        */
-      public com.google.protobuf.ProtocolStringList getResultList() {
+      public com.google.protobuf.ProtocolStringList
+          getResultList() {
         return result_.getUnmodifiableView();
       }
       /**
@@ -4708,17 +4715,19 @@ public final class Raft {
       /**
        * <code>repeated string result = 2;</code>
        */
-      public com.google.protobuf.ByteString getResultBytes(int index) {
+      public com.google.protobuf.ByteString
+          getResultBytes(int index) {
         return result_.getByteString(index);
       }
       /**
        * <code>repeated string result = 2;</code>
        */
-      public Builder setResult(int index, java.lang.String value) {
+      public Builder setResult(
+          int index, java.lang.String value) {
         if (value == null) {
-          throw new NullPointerException();
-        }
-        ensureResultIsMutable();
+    throw new NullPointerException();
+  }
+  ensureResultIsMutable();
         result_.set(index, value);
         onChanged();
         return this;
@@ -4726,11 +4735,12 @@ public final class Raft {
       /**
        * <code>repeated string result = 2;</code>
        */
-      public Builder addResult(java.lang.String value) {
+      public Builder addResult(
+          java.lang.String value) {
         if (value == null) {
-          throw new NullPointerException();
-        }
-        ensureResultIsMutable();
+    throw new NullPointerException();
+  }
+  ensureResultIsMutable();
         result_.add(value);
         onChanged();
         return this;
@@ -4738,9 +4748,11 @@ public final class Raft {
       /**
        * <code>repeated string result = 2;</code>
        */
-      public Builder addAllResult(java.lang.Iterable<java.lang.String> values) {
+      public Builder addAllResult(
+          java.lang.Iterable<java.lang.String> values) {
         ensureResultIsMutable();
-        com.google.protobuf.AbstractMessageLite.Builder.addAll(values, result_);
+        com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, result_);
         onChanged();
         return this;
       }
@@ -4937,7 +4949,15 @@ public final class Raft {
       "\001(\003\022\021\n\tleader_id\030\002 \001(\005\022\025\n\rpre_log_index\030" +
       "\003 \001(\003\022\024\n\014pre_log_term\030\004 \001(\003\022\025\n\007entries\030\005" +
       " \003(\0132\004.Log\022\025\n\rleader_commit\030\006 \001(\003\"2\n\021App" +
-      "endEntriesResp\022\014\n\004term\030\001 \001(\003\022\017\n\007success\030" + "\002 \001(\010\">\n\003Log\022\r\n\005index\030\001 \001(\003\022\014\n\004term\030\002 \001(", "\003\022\014\n\004data\030\003 \001(\014\022\014\n\004peer\030\004 \001(\t\"*\n\tClientR" + "eq\022\017\n\002op\030\001 \001(\0162\003.Op\022\014\n\004args\030\002 \003(\t\"<\n\nCli" + "entResp\022\017\n\007success\030\001 \001(\010\022\016\n\006result\030\002 \003(\t" + "\022\r\n\005error\030\003 \001(\t*\037\n\002Op\022\007\n\003Put\020\000\022\007\n\003Get\020\001\022" + "\007\n\003Del\020\0022\245\001\n\017RaftCommService\0220\n\013RequestV" + "ote\022\017.RequestVoteReq\032\020.RequestVoteResp\0226" + "\n\rAppendEntries\022\021.AppendEntriesReq\032\022.App" +
+      "endEntriesResp\022\014\n\004term\030\001 \001(\003\022\017\n\007success\030" +
+      "\002 \001(\010\">\n\003Log\022\r\n\005index\030\001 \001(\003\022\014\n\004term\030\002 \001(",
+      "\003\022\014\n\004data\030\003 \001(\014\022\014\n\004peer\030\004 \001(\t\"*\n\tClientR" +
+      "eq\022\017\n\002op\030\001 \001(\0162\003.Op\022\014\n\004args\030\002 \003(\t\"<\n\nCli" +
+      "entResp\022\017\n\007success\030\001 \001(\010\022\016\n\006result\030\002 \003(\t" +
+      "\022\r\n\005error\030\003 \001(\t*\037\n\002Op\022\007\n\003Put\020\000\022\007\n\003Get\020\001\022" +
+      "\007\n\003Del\020\0022\245\001\n\017RaftCommService\0220\n\013RequestV" +
+      "ote\022\017.RequestVoteReq\032\020.RequestVoteResp\0226" +
+      "\n\rAppendEntries\022\021.AppendEntriesReq\032\022.App" +
       "endEntriesResp\022(\n\rClientOperate\022\n.Client" +
       "Req\032\013.ClientRespB\006\n\004grpcb\006proto3"
     };
