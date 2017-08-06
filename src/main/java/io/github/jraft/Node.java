@@ -205,7 +205,11 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     }
     
     private void runFollower() {
- 
+        if(cluster_.size() == 1) {
+            becomeLeader();
+            return;
+        }
+
         int followerTimeoutMilliSec = getFollowerTimeoutMillSec();
         debug("in follower state, await secs: " + followerTimeoutMilliSec);
         awaitFor(followerTimeoutMilliSec);
@@ -703,38 +707,5 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
             e.printStackTrace();
         }
     
-    }
-    
-    public static void main(String[] args) throws IOException, InterruptedException {
-        
-        Configurator.setRootLevel(Level.DEBUG);
-        String host =  "localhost";
-        int port = 8300;
-        ArrayList<Node> nodes = new ArrayList<>();
-        ArrayList<Endpoint> endpoints = new ArrayList<>();
-        
-        for(int i=0; i<5; ++i) {
-    
-            endpoints.add(new Endpoint(host, port + i));
-        }
-    
-        for(int i=0; i<5; ++i) {
-            Config conf = new Config(i, endpoints.get(i), Config.LocalServerPort + i);
-            IFSM fsm = new KvFsm(conf.getDataDirPath());
-            nodes.add(new Node(conf, fsm, endpoints));
-        }
-        
-        Thread.sleep(30 * 1000);
-        
-        Node testNode = null;
-        for(Node n : nodes) {
-            if(n.getState() == State.Leader) {
-                n.shutdown();
-                testNode = n;
-                break;
-            }
-        }
-        
-        Thread.sleep(30 * 1000);
     }
 }

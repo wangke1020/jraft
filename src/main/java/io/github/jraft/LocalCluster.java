@@ -67,7 +67,7 @@ public class LocalCluster implements Closeable {
         }
 
         if(leaders.isEmpty())
-            throw new Exception("no leader elected");
+            return null;
         if(leaders.size() > 1)
             throw new Exception("more than one leader elected");
         return leaders.get(0);
