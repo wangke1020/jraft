@@ -1,9 +1,9 @@
-package io.github.jraft;
+package io.github.jraft.fsm;
 
 import com.google.common.base.Preconditions;
 import com.google.protobuf.InvalidProtocolBufferException;
 import grpc.Raft;
-import io.github.jraft.AppliedRes.Error;
+import io.github.jraft.fsm.AppliedRes.LogApplyError;
 import org.iq80.leveldb.DB;
 import org.iq80.leveldb.Options;
 
@@ -22,10 +22,10 @@ public class KvFsm implements IFSM, Closeable {
     private DB db_;
     
     
-    public KvFsm(String logFilePath) throws IOException {
+    public KvFsm(String dirPath) throws IOException {
         Options options = new Options();
         options.createIfMissing(true);
-        String filePath = logFilePath.endsWith("/") ? logFilePath + FILE_NAME : logFilePath + "/" + FILE_NAME;
+        String filePath = dirPath.endsWith("/") ? dirPath + FILE_NAME : dirPath + "/" + FILE_NAME;
         db_ = factory.open(new File(filePath), options);
     }
     
@@ -53,7 +53,7 @@ public class KvFsm implements IFSM, Closeable {
                     Preconditions.checkArgument(req.getArgsCount() == 1);
                     String key = req.getArgs(0);
                     String value = get(key);
-                    if (value == null) return AppliedRes.newFailedRes(Error.NoSuchKey);
+                    if (value == null) return AppliedRes.newFailedRes(LogApplyError.NoSuchKey);
                     return AppliedRes.newSuccessRes(value);
                 }
                 
@@ -73,12 +73,12 @@ public class KvFsm implements IFSM, Closeable {
                     return AppliedRes.newSuccessRes();
                 }
                 default:
-                    return AppliedRes.newFailedRes(Error.MethodNotSupported);
+                    return AppliedRes.newFailedRes(LogApplyError.MethodNotSupported);
             }
             
         } catch (InvalidProtocolBufferException e) {
             e.printStackTrace();
-            return AppliedRes.newFailedRes(Error.InternalError);
+            return AppliedRes.newFailedRes(LogApplyError.InternalError);
         }
     }
     

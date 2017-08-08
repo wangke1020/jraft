@@ -1,8 +1,9 @@
 package io.github.jraft;
 
 import com.google.common.base.Preconditions;
+import io.github.jraft.exception.LeaderElectionException;
+import io.github.jraft.fsm.IFSM;
 
-import javax.annotation.Nullable;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -59,7 +60,7 @@ public class LocalCluster implements Closeable {
         }
     }
 
-    public Node getLeader() throws Exception {
+    public Node getLeader() throws LeaderElectionException {
         List<Node> leaders = new ArrayList<>();
         for(Node n : nodes_.values()) {
             if(n.isLeader())
@@ -69,7 +70,7 @@ public class LocalCluster implements Closeable {
         if(leaders.isEmpty())
             return null;
         if(leaders.size() > 1)
-            throw new Exception("more than one leader elected");
+            throw new LeaderElectionException("more than one leader elected");
         return leaders.get(0);
     }
     

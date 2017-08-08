@@ -5,6 +5,9 @@ import grpc.Raft;
 import grpc.Raft.ClientResp;
 import grpc.Raft.Log;
 import grpc.RaftCommServiceGrpc;
+import io.github.jraft.fsm.AppliedRes;
+import io.github.jraft.fsm.IFSM;
+import io.github.jraft.fsm.KvFsm;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
@@ -14,7 +17,6 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -211,35 +213,35 @@ public class RaftTest {
             }
         }
     }
-//
-//    @Test
-//    public void testThreeNodesWithMockFsm() throws Exception {
-//        try (LocalCluster cluster = new LocalCluster(3, MockFSM.class, tmpFolder_)) {
-//
-//            Node leader =  waitLeaderElected(cluster);
-//
-//            try (TestClient testClient = new TestClient(leader.getEndpoint().getHost(), leader.getConf().getLocalServerPort())) {
-//                ClientResp resp = testClient.put("test", "test");
-//                Assert.assertTrue(resp.getSuccess());
-//
-//                for (Node n : cluster.getNodeList()) {
-//                    MockFSM fsm = (MockFSM) n.getFsm();
-//                    Assert.assertEquals("1 msg in fsm should be applied in node: " + n.getId(), 1, fsm.getLogNum());
-//                }
-//
-//                System.out.println("put again");
-//                // put again
-//                resp = testClient.put("test2", "test");
-//                Assert.assertTrue(resp.getSuccess());
-//
-//                for (Node n : cluster.getNodeList()) {
-//                    MockFSM fsm = (MockFSM) n.getFsm();
-//                    Assert.assertEquals("2 msg in fsm should be applied in node: " + n.getId(), 2, fsm.getLogNum());
-//                }
-//
-//            }
-//        }
-//    }
+
+    @Test
+    public void testThreeNodesWithMockFsm() throws Exception {
+        try (LocalCluster cluster = new LocalCluster(3, MockFSM.class, tmpFolder_)) {
+
+            Node leader =  waitLeaderElected(cluster);
+
+            try (TestClient testClient = new TestClient(leader.getEndpoint().getHost(), leader.getConf().getLocalServerPort())) {
+                ClientResp resp = testClient.put("test", "test");
+                Assert.assertTrue(resp.getSuccess());
+
+                for (Node n : cluster.getNodeList()) {
+                    MockFSM fsm = (MockFSM) n.getFsm();
+                    Assert.assertEquals("1 msg in fsm should be applied in node: " + n.getId(), 1, fsm.getLogNum());
+                }
+
+                System.out.println("put again");
+                // put again
+                resp = testClient.put("test2", "test");
+                Assert.assertTrue(resp.getSuccess());
+
+                for (Node n : cluster.getNodeList()) {
+                    MockFSM fsm = (MockFSM) n.getFsm();
+                    Assert.assertEquals("2 msg in fsm should be applied in node: " + n.getId(), 2, fsm.getLogNum());
+                }
+
+            }
+        }
+    }
 
     @Rule
     public ExpectedException exception = ExpectedException.none();

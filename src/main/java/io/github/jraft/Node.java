@@ -17,16 +17,17 @@ import com.google.protobuf.ByteString;
 import grpc.Raft.*;
 import grpc.RaftCommServiceGrpc;
 import grpc.RaftCommServiceGrpc.RaftCommServiceFutureStub;
+import io.github.jraft.exception.LogReplicaException;
+import io.github.jraft.fsm.AppliedRes;
+import io.github.jraft.fsm.IFSM;
 import io.grpc.Channel;
 import io.grpc.Server;
 import io.grpc.StatusRuntimeException;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
-import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.core.config.Configurator;
 
 import javax.annotation.Nullable;
 
@@ -519,7 +520,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         }
         
         @Override
-        public Boolean call() throws Exception {
+        public Boolean call() throws LogReplicaException {
             AppendEntriesReq.Builder builder = AppendEntriesReq.newBuilder();
             
             while(true) {
@@ -562,7 +563,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                     break;
                 } else {
                     if(--nextIndex_[followerId] < 0)
-                        throw new Exception("why nexIndex < 0? when appending entries to " + endpoint_);
+                        throw new LogReplicaException("why nexIndex < 0? when appending entries to " + endpoint_);
                 }
             }
             return true;
@@ -627,7 +628,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
         applyFSM(++commitIndex_);
     
         // Notify followers to commit log
-        boolean success = dispatchHeartbeat(conf_.getRequestTimeoutSec());
+        boolean success = dispatchHeartbeat(Config.getRequestTimeoutSec());
         if (!success) {
             becomeFollower();
             ClientResp.newBuilder().setSuccess(false).build();
