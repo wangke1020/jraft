@@ -191,12 +191,15 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
 
     @VisibleForTesting
     public int getFollowerTimeoutMillSec() {
-        return (new Random().nextInt(150)
-                + conf_.getFollowerTimeoutSec() * 1000 + 1);
+        return randTimeout(conf_.getFollowerTimeoutSec() * 1000);
+    }
+
+    public int randTimeout(int min) {
+        return new Random().nextInt(min) + min;
     }
     
     private int getCandidateTimeoutMilliSec() {
-        return conf_.getCandidateTimeoutSec() * 1000;
+        return randTimeout(conf_.getCandidateTimeoutSec() * 1000);
     }
     
     private int getQuorumNum() {

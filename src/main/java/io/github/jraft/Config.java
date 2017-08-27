@@ -7,12 +7,12 @@ import java.io.File;
 import java.io.IOException;
 
 public class Config {
-    private static int FollowerTimeoutSec = 5;
-    private static int CandidateTimeoutSec = 5;
+    private static int FollowerTimeoutSec = 2;
+    private static int CandidateTimeoutSec = 2;
 
-    private static int LeaderHbIntervalSec = 2;
+    private static int LeaderHbIntervalSec = 1;
     
-    private static int RequestTimeoutSec = 2;
+    private static int RequestTimeoutSec = 1;
     
     private static String DEFAULT_ROOT_DATA_DIR = "/opt/test/raft/";
     

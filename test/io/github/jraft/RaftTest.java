@@ -302,7 +302,7 @@ public class RaftTest {
             }
 
             // Wait for log replication
-            Thread.sleep(Config.getLeaderHbIntervalSec()  * 2 * 1000);
+            Thread.sleep(10000);
             // Check two entries are applied to the FSM
             for (Node n : cluster.getNodeList()) {
                 MockFSM fsm = (MockFSM) n.getFsm();

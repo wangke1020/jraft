@@ -4,8 +4,11 @@ dist: trusty
 jdk:
   - oraclejdk8
 
+script:
+- gradle build --info
+
 after_success:
-- ./gradlew pitest coveralls
+- gradle pitest coveralls
 
 env:
   global:
