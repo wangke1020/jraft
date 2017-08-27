@@ -3,6 +3,8 @@ package io.github.jraft;
 import com.google.common.base.Preconditions;
 import io.github.jraft.exception.LeaderElectionException;
 import io.github.jraft.fsm.IFSM;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -11,7 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 
 public class LocalCluster implements Closeable {
-    
+    private static final Logger logger_ = LogManager.getLogger(LocalCluster.class);
     private HashMap<Integer, Node> nodes_ = new HashMap<>();
     
     public LocalCluster(int n, Class<?> fsmClass, String rootDataDir) throws ReflectiveOperationException, IOException, InterruptedException {
@@ -69,8 +71,11 @@ public class LocalCluster implements Closeable {
 
         if(leaders.isEmpty())
             return null;
-        if(leaders.size() > 1)
-            throw new LeaderElectionException("more than one leader elected");
+        if(leaders.size() > 1) {
+            String err = "more than one leader elected";
+            logger_.error(err);
+            throw new LeaderElectionException(err);
+        }
         return leaders.get(0);
     }
     

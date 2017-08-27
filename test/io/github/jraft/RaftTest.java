@@ -262,7 +262,7 @@ public class RaftTest {
 
     @Test
     public void testLeaderFail() throws Exception {
-        try (LocalCluster cluster = new LocalCluster(3, MockFSM.class, tmpFolder_)) {
+        try (LocalCluster cluster = new LocalCluster(5, MockFSM.class, tmpFolder_)) {
 
             Node firstLeader = waitLeaderElected(cluster);
 
@@ -284,7 +284,7 @@ public class RaftTest {
             // new firstLeader should be elected
             Node newLeader = waitLeaderElected(cluster);
 
-            // Ensure the term is greater
+            // Ensure the term is increased
             Assert.assertTrue(newLeader.getCurrentTerm() > term);
 
             // resume old firstLeader

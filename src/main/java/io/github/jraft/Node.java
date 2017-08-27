@@ -44,7 +44,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     private final List<Endpoint> cluster_;
     private Integer voteFor_;
     private Long lastVoteTerm_;
-    private AtomicLong currentTerm_;
+    private final AtomicLong currentTerm_;
 
     private AtomicReference<State> state_;
     private Endpoint endpoint_;
@@ -243,6 +243,7 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
     
     private void startCandidateSate() {
         incrCurrentTerm();
+        voteFor_ = id_;
         grantedVotes_ = 1;
     }
     
@@ -392,21 +393,29 @@ public class Node extends RaftCommServiceGrpc.RaftCommServiceImplBase {
                             io.grpc.stub.StreamObserver<RequestVoteResp> responseObserver) {
         
         RequestVoteResp.Builder respBuilder = RequestVoteResp.newBuilder();
-        debug("req term: " + req.getTerm() + ", currentTerm: " + currentTerm_.get());
-        if(req.getTerm() > currentTerm_.get()) {
-            if (!isFollower()) {
-                becomeFollower();
+        debug("req term: " + req.getTerm() +
+                ", currentTerm: " + currentTerm_.get() +
+                ", request from: " + req.getCandidateId() +
+                ", voteFor :" + voteFor_);
+
+        synchronized (currentTerm_) {
+            if (req.getTerm() < currentTerm_.get()) {
+                respBuilder.setVoteGranted(false);
+            } else if (req.getTerm() > currentTerm_.get() ||
+                    (voteFor_ == null || voteFor_ == req.getCandidateId()) && (req.getLastLogTerm() == lastVoteTerm_)) {
+
+                if (!isFollower()) {
+                    becomeFollower();
+                }
+                signalTimeoutCond();
+                respBuilder.setVoteGranted(true);
+                updateVoteFor(req.getCandidateId());
+                lastVoteTerm_ = req.getTerm();
+                voteFor_ = req.getCandidateId();
+                setCurrentTerm(req.getTerm());
+            } else {
+                respBuilder.setVoteGranted(false);
             }
-            signalTimeoutCond();
-            respBuilder.setVoteGranted(true);
-            updateVoteFor(req.getCandidateId());
-            lastVoteTerm_ = req.getTerm();
-        } else if ((voteFor_ == null || lastVoteTerm_ == null) || lastVoteTerm_.equals(req.getTerm()) && voteFor_.equals(req.getCandidateId())) {
-            signalTimeoutCond();
-            respBuilder.setVoteGranted(true);
-            updateVoteFor(req.getCandidateId());
-        }else {
-            respBuilder.setVoteGranted(false);
         }
     
         if (respBuilder.getVoteGranted()) {
