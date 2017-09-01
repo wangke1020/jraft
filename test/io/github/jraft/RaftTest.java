@@ -22,6 +22,8 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.config.Configurator;
 import org.junit.*;
 import org.junit.rules.ExpectedException;
@@ -36,7 +38,6 @@ class MockFSM implements IFSM {
 
     @Override
     public AppliedRes apply(Log log) {
-        System.out.println("===============>MockFSM: add log to list");
         logs_.add(log);
         return AppliedRes.newSuccessRes();
     }
@@ -53,7 +54,7 @@ class MockFSM implements IFSM {
 
 
 public class RaftTest {
-
+    private static final Logger logger_ = LogManager.getLogger(RaftTest.class);
     private String tmpFolder_ = "/tmp/raft-test/";
     private File dir_;
 
@@ -224,16 +225,37 @@ public class RaftTest {
                 ClientResp resp = testClient.put("test", "test");
                 Assert.assertTrue(resp.getSuccess());
 
+                int consistentNodes = 0;
                 for (Node n : cluster.getNodeList()) {
                     MockFSM fsm = (MockFSM) n.getFsm();
-                    Assert.assertEquals("1 msg in fsm should be applied in node: " + n.getId(), 1, fsm.getLogNum());
+                    int logNum = fsm.getLogNum();
+                    if (logNum == 1) {
+                        consistentNodes++;
+                    } else {
+                        logger_.debug(n.getId() + " got inconsistent msg num: " + logNum);
+                    }
                 }
+                Assert.assertTrue("consistent node should >=2 but got " + consistentNodes, consistentNodes >= 2);
 
                 System.out.println("put again");
                 // put again
                 resp = testClient.put("test2", "test");
                 Assert.assertTrue(resp.getSuccess());
 
+                consistentNodes = 0;
+                for (Node n : cluster.getNodeList()) {
+                    MockFSM fsm = (MockFSM) n.getFsm();
+                    int logNum = fsm.getLogNum();
+                    if (logNum == 2) {
+                        consistentNodes++;
+                    } else {
+                        logger_.debug(n.getId() + " got inconsistent msg num: " + logNum);
+                    }
+                }
+                Assert.assertTrue("consistent node should >=2 but got " + consistentNodes, consistentNodes >= 2);
+
+                // sleep for 3 second and check if all nodes get same msgs
+                Thread.sleep(3000);
                 for (Node n : cluster.getNodeList()) {
                     MockFSM fsm = (MockFSM) n.getFsm();
                     Assert.assertEquals("2 msg in fsm should be applied in node: " + n.getId(), 2, fsm.getLogNum());
@@ -298,7 +320,7 @@ public class RaftTest {
                 ClientResp  resp = testClient.put(getRandKey(), "test");
                 if(resp.getSuccess())
                     Assert.fail("why apply successfully?");
-            }catch (StatusRuntimeException e) {
+            }catch (StatusRuntimeException ignored) {
             }
 
             // Wait for log replication
@@ -315,8 +337,8 @@ public class RaftTest {
     public void test2FollowersTimeoutAtSameTime() throws Exception {
         class MockNode extends Node {
 
-            int i = 0;
-            public MockNode(Config conf, IFSM fsm, List<Endpoint> cluster) throws IOException, InterruptedException {
+            private int i = 0;
+            private MockNode(Config conf, IFSM fsm, List<Endpoint> cluster) throws IOException, InterruptedException {
                 super(conf, fsm, cluster);
             }
 
@@ -335,7 +357,7 @@ public class RaftTest {
         int startPort = 5555;
         ArrayList<Endpoint> endpoints = new ArrayList<>();
         for (int i = 0; i < 3; ++i) {
-            endpoints.add(new Endpoint("localhost", startPort + i));
+            endpoints.add(new Endpoint(i, "localhost", startPort + i));
         }
 
         for (int i = 0; i < 3; ++i) {
@@ -349,6 +371,41 @@ public class RaftTest {
 
         try (LocalCluster cluster = new LocalCluster(nodes)) {
             waitLeaderElected(cluster);
+        }
+    }
+
+    @Test
+    public void testBehindFollower() throws Exception {
+        try (LocalCluster cluster = new LocalCluster(5, MockFSM.class, tmpFolder_)) {
+
+            Node firstLeader = waitLeaderElected(cluster);
+            List<Node> followers = cluster.getFollowers();
+            Node behind = followers.get(0);
+
+            logger_.info("behind id:{}, behind failed", behind.getId());
+            behind.fail();
+
+            try (TestClient testClient = new TestClient(firstLeader.getEndpoint().getHost(), firstLeader.getConf().getLocalServerPort())) {
+                for (int i = 0; i < 100; i++) {
+                    ClientResp resp = testClient.put(getRandKey(), "test");
+                    Assert.assertTrue(resp.getSuccess());
+                }
+            } catch (StatusRuntimeException ignored) {
+            }
+
+            logger_.info("resume behind");
+            behind.resume();
+
+            Thread.sleep(1000);
+
+
+            MockFSM leaderFsm = (MockFSM) firstLeader.getFsm();
+            int logNum = leaderFsm.getLogNum();
+            for (Node n : cluster.getNodeList()) {
+                MockFSM fsm = (MockFSM) n.getFsm();
+                Assert.assertEquals(logNum + " logs should be applied in node : " + n.getId(), logNum, fsm.getLogNum());
+            }
+
         }
     }
 }

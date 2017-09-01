@@ -23,7 +23,7 @@ public class LocalCluster implements Closeable {
         ArrayList<Endpoint> endpoints = new ArrayList<>();
         
         for (int i = 0; i < n; ++i) {
-            endpoints.add(new Endpoint("localhost", startPort + i));
+            endpoints.add(new Endpoint(i, "localhost", startPort + i));
         }
         
         for (int i = 0; i < n; ++i) {
@@ -77,6 +77,15 @@ public class LocalCluster implements Closeable {
             throw new LeaderElectionException(err);
         }
         return leaders.get(0);
+    }
+
+    public List<Node> getFollowers() {
+        List<Node> followers = new ArrayList<>();
+        for(Node n : nodes_.values()) {
+            if(!n.isLeader())
+                followers.add(n);
+        }
+        return followers;
     }
     
     @Override

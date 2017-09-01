@@ -4,10 +4,12 @@ import javax.annotation.Nullable;
 
 public class Endpoint {
 
+    private int id_;
     private String host_;
     private int port_;
     
-    public Endpoint(String host, int port) {
+    public Endpoint(int id, String host, int port) {
+        id_   = id;
         host_ = host;
         port_ = port;
     }
@@ -19,6 +21,8 @@ public class Endpoint {
     public int getPort() {
         return port_;
     }
+
+    public int getId_() {return id_;}
     
     
     @Override
@@ -26,7 +30,9 @@ public class Endpoint {
         if (object == null) return false;
         if (!(object instanceof Endpoint)) return false;
         Endpoint ep = (Endpoint) object;
-        return host_.equals(ep.getHost()) && port_ == ep.getPort();
+        return id_ == ep.getId_() &&
+                host_.equals(ep.getHost()) &&
+                port_ == ep.getPort();
     }
     
     @Override
@@ -36,7 +42,7 @@ public class Endpoint {
 
     @Override
     public String toString() {
-        return host_ + ":" + port_;
+        return id_ + ":" +  host_ + ":" + port_;
     }
     
 }
